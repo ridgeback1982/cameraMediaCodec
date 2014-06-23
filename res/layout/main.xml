@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:orientation="vertical" >
+
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/hello" />
+
+    <Button
+        android:id="@+id/button_setparam"
+        android:layout_width="fill_parent"
+        android:layout_height="40dip"
+        android:text="Test supported param" />
+
+    <Button
+        android:id="@+id/button_testspecifiedparam"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="Test specified param"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="horizontal" >
+
+        <Spinner
+            android:id="@+id/Spinner_facing"
+            android:layout_width="120px"
+            android:layout_height="wrap_content" >
+        </Spinner>
+
+        <Spinner
+            android:id="@+id/Spinner_cf"
+            android:layout_width="120px"
+            android:layout_height="wrap_content" >
+        </Spinner>
+
+        <Spinner
+            android:id="@+id/Spinner_size"
+            android:layout_width="120px"
+            android:layout_height="wrap_content" >
+        </Spinner>
+
+        <Spinner
+            android:id="@+id/Spinner_fps"
+            android:layout_width="120px"
+            android:layout_height="wrap_content" >
+        </Spinner>
+
+        <RadioGroup  
+        android:id="@+id/radiogroup1"  
+        android:layout_width="wrap_content"  
+        android:layout_height="wrap_content"  
+        android:orientation="vertical"  
+        android:layout_x="3px"  
+    	>  
+	 		<RadioButton
+	        android:id="@+id/RadioButton_surfaceview"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="surfaceVIEW" />
+	
+	    	<RadioButton
+	        android:id="@+id/radioButton_surfacetexture"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="surfaceTexture" />
+    	
+    	</RadioGroup>
+    	
+        <RadioGroup  
+        android:id="@+id/radiogroup2"  
+        android:layout_width="wrap_content"  
+        android:layout_height="wrap_content"  
+        android:orientation="vertical"  
+        android:layout_x="3px"  
+    	>  
+	 		<RadioButton
+	        android:id="@+id/RadioButton_AllocPB"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="AllocPreviewBuffer" />
+	
+	    	<RadioButton
+	        android:id="@+id/radioButton_NotAllocPB"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="NotAllocPreviewBuffer" />
+    	
+    	</RadioGroup>
+    </LinearLayout>
+    
+    <CheckBox
+            android:id="@+id/checkBoxEnableVideoEncode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="video_encode" />
+
+    <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="horizontal" >
+    
+    	<TextView
+        android:id="@+id/textview_capturefps"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Capture FPS:" />
+    	
+    	<TextView
+        android:id="@+id/textview_blank"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="        " />
+    	
+    	<TextView
+        android:id="@+id/textview_encodefps"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Encode FPS:" />
+    
+    </LinearLayout>
+
+     <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="horizontal" >
+	    <Button
+	        android:id="@+id/button_testFPS"
+	        android:layout_width="wrap_content"
+	        android:layout_height="40dip"
+	        android:text="TestFPS" />
+	    <Button
+	        android:id="@+id/button_resetPreview"
+	        android:layout_width="wrap_content"
+	        android:layout_height="wrap_content"
+	        android:text="ResetPreview" />
+     </LinearLayout>
+
+     <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="horizontal" >
+	    
+        <SurfaceView
+        android:id="@+id/surfaceView_preview"
+        android:layout_width="256dip"
+        android:layout_height="144dip" />
+    
+    	<SurfaceView
+        android:id="@+id/surfaceView_decode"
+        android:layout_width="160dip"
+        android:layout_height="90dip" />
+         
+     </LinearLayout>
+     
+    
+
+</LinearLayout>
