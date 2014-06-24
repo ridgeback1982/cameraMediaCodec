@@ -95,11 +95,39 @@
     	</RadioGroup>
     </LinearLayout>
     
+    <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal" >
+    
     <CheckBox
             android:id="@+id/checkBoxEnableVideoEncode"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="video_encode" />
+    <CheckBox
+            android:id="@+id/checkBoxAvcGotoFile"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AvcGotoFile" />
+    
+    <EditText
+        android:id="@+id/FPSedit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:hint="fps"
+        android:inputType="number" >
+    </EditText>
+    
+    <EditText
+        android:id="@+id/BPSedit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:hint="kbps"
+        android:inputType="number" >
+    </EditText>
+    
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="fill_parent"

@@ -45,6 +45,8 @@ public class AvcEncoder
 	private int mPrimeColorFormat = 0; //0 is not listed in Android doc, as MediaCodecInfo.CodecCapabilities
 	private int mStatus = STATUS_INVALID;
 	
+	private FpsHelper mFpsHelper = null;
+	
 	private static MediaCodecInfo selectCodec(String mimeType) {
 	     int numCodecs = MediaCodecList.getCodecCount();
 	     for (int i = 0; i < numCodecs; i++) {
@@ -99,6 +101,9 @@ public class AvcEncoder
 		
 		mSink = sink;
 		
+		mFpsHelper = new FpsHelper();
+		mFpsHelper.SetEnableDrop(true);
+		
 		mStatus = STATUS_LOADED;
 	}
 	
@@ -134,6 +139,7 @@ public class AvcEncoder
 			return -1;
 		}
 		
+		mFpsHelper.SetFrameRateControlTarget(framerate);
 		mStatus = STATUS_IDLE;
 		
 		Log.i("AvcEncoder", "tryConfig --");
@@ -221,9 +227,15 @@ public class AvcEncoder
 			mMC.setParameters(b);
 	}
 	
-	public int InputRawBuffer(/*in*/byte[] bytes, /*in*/int len)
+	public int InputRawBuffer(/*in*/byte[] bytes, /*in*/int len, long timestamp)
 	{
 		//Log.i("AvcEncoder", "InputRawBuffer ++");
+		
+		if (true == mFpsHelper.ShouldBeDropped(timestamp))
+		{
+			return R_BUFFER_OK;
+		}
+		
 		int inputbufferindex = mMC.dequeueInputBuffer(BUFFER_TIMEOUT);
 		if (inputbufferindex >= 0)
 		{

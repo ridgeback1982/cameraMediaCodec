@@ -54,6 +54,7 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -76,14 +77,17 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	private Spinner mSpnFacing;
 	private Spinner mSpnFPS;
 	private CheckBox mCBVideoEncode;
+	private CheckBox mCBAvcGotoFile;
+	private EditText mETFps;
+	private EditText mETBps;	//kbps
 	boolean mUseSurfaceTexture;
 	private OnClickListener OnClickEvent;
 	private final String log_tag = "TestCamera";
 	private int yy;
 	private int mRawHeight;
 	private int mRawWidth;
-	int mEncode_fps = 24;
-	int mEncode_bps = 640000;
+	int mEncode_fps;
+	int mEncode_bps;
 	
 	private boolean m_bStartPreview = false;
 	
@@ -117,14 +121,15 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	long mPreviewGap_starttick = 0;
 	
 	AvcEncoder mAvcEnc = null;
-	boolean mEnableVideoEncode = false;
+	boolean mEnableVideoEncode;
 	private byte[] mAvcBuf = null;
 	private final static Object mAvcEncLock = new Object();  
 	private CodecThread m_codec_thread = null;
     private Handler m_CodecMsgHandler = null;
     private int mEncCountPerSecond = 0;
+    private int mEncBytesPerSecond = 0;
     long mAvcEncodeFirstOutputGap_starttick = 0;
-    boolean mAvcGotoFile = false;
+    boolean mAvcGotoFile;
     int	mPeriodKeyFrame = -1;	//ms
     private FileOutputStream mFOS = null;
     byte[] mRawData = null;
@@ -355,10 +360,6 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		mSpnFacing.setVisibility(View.INVISIBLE);
 		mSpnFPS.setVisibility(View.INVISIBLE);
 		
-		mCBVideoEncode = (CheckBox)findViewById(R.id.checkBoxEnableVideoEncode);
-		mCBVideoEncode.setChecked(mEnableVideoEncode);
-		mCBVideoEncode.setOnCheckedChangeListener(this);
-		
 		//set Spinner's width dynamically
 		DisplayMetrics dm = new DisplayMetrics();
 		getWindowManager().getDefaultDisplay().getMetrics(dm);
@@ -402,11 +403,27 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		radio_NotAllocPB.setChecked(true);
     	radiogroup2.setOnCheckedChangeListener(this);  
     	
+    	mETFps = (EditText)findViewById(R.id.FPSedit);
+    	mETBps = (EditText)findViewById(R.id.BPSedit);
     	
+    	
+    	mEnableVideoEncode = false;
     	mPeriodKeyFrame = -1;		//test for request key frame, ms period
-    	mAvcGotoFile = true;		//really for debug, write files
+    	mAvcGotoFile = false;		//really for debug, write files
     	mRawHeight = 0;
     	mRawWidth = 0;
+    	mEncode_fps = 18;
+    	mEncode_bps = 440000;
+    	
+    	
+    	mCBVideoEncode = (CheckBox)findViewById(R.id.checkBoxEnableVideoEncode);
+		mCBVideoEncode.setChecked(mEnableVideoEncode);
+		mCBVideoEncode.setOnCheckedChangeListener(this);
+		
+		mCBAvcGotoFile = (CheckBox)findViewById(R.id.checkBoxAvcGotoFile);
+		mCBAvcGotoFile.setChecked(mAvcGotoFile);
+		mCBAvcGotoFile.setOnCheckedChangeListener(this);
+    	
 	 	
 	 	mEventHandler = new Handler() {
 			public void handleMessage(Message msg) {
@@ -419,8 +436,9 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					break;
 					
 				case EVENT_CALC_ENCODE_FPS:
-					setEncodeFPS_TextView(mEncCountPerSecond, mRawWidth, mRawHeight);
+					setEncodeFPS_TextView(mEncCountPerSecond, mRawWidth, mRawHeight, mEncBytesPerSecond*8);
 					mEncCountPerSecond = 0;
+					mEncBytesPerSecond = 0;
 					sendEmptyMessageDelayed(EVENT_CALC_ENCODE_FPS, 1000);
 					break;
 				}
@@ -580,7 +598,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		
 		if (mEnableVideoEncode == true)
 		{
-			setEncodeFPS_TextView(0, 0, 0);
+			setEncodeFPS_TextView(0, 0, 0, 0);
 			if (mEventHandler != null)
 			{
 				mEventHandler.removeMessages(EVENT_CALC_ENCODE_FPS);
@@ -821,10 +839,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	tv.setText("Capture FPS:"+String.valueOf(fps)+", "+String.valueOf(w)+"x"+String.valueOf(h));
     }
     
-    private void setEncodeFPS_TextView(int fps, int w, int h)
+    private void setEncodeFPS_TextView(int fps, int w, int h, int bps)
     {
     	TextView tv = (TextView)findViewById(R.id.textview_encodefps);
-    	tv.setText("Encode FPS:"+String.valueOf(fps)+", "+String.valueOf(w)+"x"+String.valueOf(h));
+    	tv.setText("Encode FPS:"+String.valueOf(fps)+", "+String.valueOf(w)+"x"+String.valueOf(h)+", "+bps+"bps");
     }
     
     private void TestSpecifiedParam(CameraInfoCollector collector, List<Rect> list_rect)
@@ -1056,6 +1074,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					
 					//mAvcEncOutputSuspend = true;
 					mEncCountPerSecond = 0;
+					mEncBytesPerSecond = 0;
 					mEventHandler.removeMessages(EVENT_CALC_ENCODE_FPS);
 					mEventHandler.sendEmptyMessage(EVENT_CALC_ENCODE_FPS);
 					
@@ -1112,7 +1131,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					
 					synchronized(mAvcEncLock)
 					{
-						int res = mAvcEnc.InputRawBuffer(mRawData, data_size);
+						int res = mAvcEnc.InputRawBuffer(mRawData, data_size, System.currentTimeMillis());
 						if (res != 0)
 						{
 							Log.w(log_tag, "onPreviewFrame. mAvcEnc.InputRawBuffer res="+res);
@@ -1199,6 +1218,15 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					
 					mAvcBuf = new byte[AvcEncoder.DEFAULT_AVC_BUF_SIZE];
 					
+					if (!mETFps.getText().toString().equals(""))
+					{
+						mEncode_fps = Integer.parseInt(mETFps.getText().toString());
+					}
+					if (!mETBps.getText().toString().equals(""))
+					{
+						mEncode_bps = Integer.parseInt(mETBps.getText().toString()) * 1000;
+					}
+					
 					m_codec_thread = new CodecThread();
 					m_codec_thread.start();
 					
@@ -1221,11 +1249,21 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					mRawWidth = 0;
 					mRawHeight = 0;
 					mEncCountPerSecond = 0;
-					setEncodeFPS_TextView(0, mRawWidth, mRawHeight);
+					mEncBytesPerSecond = 0;
+					setEncodeFPS_TextView(0, mRawWidth, mRawHeight, 0);
 				}
 				
 				
 				mEnableVideoEncode = arg1;
+			}
+			break;
+			
+		case R.id.checkBoxAvcGotoFile:
+			{
+				if (arg1 != mAvcGotoFile)
+				{
+					mAvcGotoFile = arg1;
+				}
 			}
 			break;
 		}
@@ -1315,7 +1353,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 													}
 												}
 												
-												
+												mEncBytesPerSecond += len[0];
 												mEncCountPerSecond++;
 												if (mAvcEncodeFirstOutputGap_starttick != 0)
 												{
