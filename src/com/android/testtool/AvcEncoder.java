@@ -253,17 +253,17 @@ public class AvcEncoder
 			inputBuffer.put(bytes, 0, len);
 			mMC.queueInputBuffer(inputbufferindex, 0, len, 0, 0);
 			
-			Log.i("AvcEncoder", "InputRawBuffer -- OK, capacity="+capacity);
+			//Log.i("AvcEncoder", "InputRawBuffer -- OK, capacity="+capacity);
 		}
 		else if (inputbufferindex == MediaCodec.INFO_TRY_AGAIN_LATER)
 		{
 			Log.i("AvcEncoder", "InputRawBuffer -- INFO_TRY_AGAIN_LATER");
-			try {
-				Thread.sleep(1);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+//			try {
+//				Thread.sleep(1);
+//			} catch (InterruptedException e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			}
 			
 			return R_TRY_AGAIN_LATER;
 		}
@@ -316,7 +316,7 @@ public class AvcEncoder
 			len[0] = mBI.size ;
 			mMC.releaseOutputBuffer(outputbufferindex, false);
 			
-			Log.i("AvcEncoder", "OutputAvcBuffer -- OK at "+ outputbufferindex+", size="+len[0]);
+			//Log.i("AvcEncoder", "OutputAvcBuffer -- OK at "+ outputbufferindex+", size="+len[0]);
 		}
 		else if (outputbufferindex == MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED)
 		{
@@ -342,12 +342,12 @@ public class AvcEncoder
 		else if (outputbufferindex == MediaCodec.INFO_TRY_AGAIN_LATER)
 		{
 			Log.i("AvcEncoder", "OutputAvcBuffer -- INFO_TRY_AGAIN_LATER");
-			try {
-				Thread.sleep(10);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+//			try {
+//				Thread.sleep(10);
+//			} catch (InterruptedException e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			}
 			
 			return R_TRY_AGAIN_LATER;
 		}

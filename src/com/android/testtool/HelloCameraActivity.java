@@ -12,7 +12,10 @@ import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 
 import com.android.testtool.R;
 
@@ -133,6 +136,8 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     int	mPeriodKeyFrame = -1;	//ms
     private FileOutputStream mFOS = null;
     byte[] mRawData = null;
+    Queue<byte[]> mPreviewBuffers = null;
+    
     //private boolean mAvcEncOutputSuspend = false;
     
     private final int EVENT_GET_ENCODE_OUTPUT = 1;
@@ -285,37 +290,6 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
             		}
             		break;
             		
-            	case R.id.button_resetPreview:
-            		if (mCam != null)
-            		{
-            			Log.i(log_tag, "button_resetPreview");
-            			
-            			if (m_bStartPreview == true)
-            			{
-            				
-	            			mCam.stopPreview();
-	            			if (mUsePreviewBuffer == true)
-	            				mCam.setPreviewCallbackWithBuffer(null);
-	            			else
-	            				mCam.setPreviewCallback(null);
-	            			Log.i(log_tag, "button_resetPreview, stopPreview");
-	            			setCaptureFPS_TextView(0, 0, 0);
-	            			m_bStartPreview = false;
-            			
-            			}
-            			else
-            			{
-            				if (mUsePreviewBuffer == true)
-	            				mCam.setPreviewCallbackWithBuffer(mThis);
-	            			else
-	            				mCam.setPreviewCallback(mThis);
-	            			mCam.startPreview();
-	            			m_bStartPreview = true;
-	            			Log.i(log_tag, "button_resetPreview, startPreview");
-            			}
-            			
-            		}
-            		break;
             	}
             	//Log.i(log_tag,"onClick");
             }
@@ -538,13 +512,6 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     			
     			stopPreview();
     			
-//    			mCam.stopPreview();
-//				if (mUsePreviewBuffer == true)
-//    				mCam.setPreviewCallbackWithBuffer(null);
-//    			else
-//    				mCam.setPreviewCallback(null);	
-//				mCam.release();
-    			
     			try {
 					startPreview();
     				//TestFPS();
@@ -678,11 +645,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		case KeyEvent.KEYCODE_BACK:
 			if (mCam != null)
 			{
-				mCam.stopPreview();
-				if (mUsePreviewBuffer == true)
-    				mCam.setPreviewCallbackWithBuffer(null);
-    			else
-    				mCam.setPreviewCallback(null);
+				stopPreview();
 				
 				mCam.release();
 				mCam = null;
@@ -717,8 +680,37 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		camera.setDisplayOrientation(result);
 	}
 	
+	private int getPreviewBufferSize(int width, int height, int format)
+	{
+		int size = 0;
+		switch(format)
+		{
+		case ImageFormat.YV12:
+			{
+				int yStride   = (int) Math.ceil(width / 16.0) * 16;
+				int uvStride  = (int) Math.ceil( (yStride / 2) / 16.0) * 16;
+				int ySize     = yStride * height;
+				int uvSize    = uvStride * height / 2;
+				size = ySize + uvSize * 2;
+			}
+			break;
+			
+		case ImageFormat.NV21:
+			{
+				float bytesPerPix = (float)ImageFormat.getBitsPerPixel(format) / 8;
+				size = (int) (width * height * bytesPerPix);
+			}
+			break;
+		}
+
+		return size;
+	}
+	
 	private void startPreview() throws IOException
 	{
+		if (mCam == null)
+			return;
+		
 		if (mUseSurfaceTexture == true)
     	{
     		mCam.setPreviewTexture(mSurfaceTexture);
@@ -732,8 +724,8 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	try {
     		para.setPreviewFormat(mSelectColorFormat);
         	para.setPreviewSize(mSelectWidth, mSelectHeight);
-        	para.setPreviewFrameRate(mSelectFPS);
-        	//para.setPreviewFpsRange(mSelectFPS, mSelectFPS);
+        	//para.setPreviewFrameRate(mSelectFPS);
+        	para.setPreviewFpsRange(mSelectFPS*1000, mSelectFPS*1000);
     		
     		List<String> supportedFocus = para.getSupportedFocusModes();
 			if (supportedFocus != null && supportedFocus.indexOf(Parameters.FOCUS_MODE_CONTINUOUS_VIDEO) >= 0){
@@ -753,11 +745,27 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	
     	if (mUsePreviewBuffer == true)
     	{
-    		int bytesPerPix = ImageFormat.getBitsPerPixel(mSelectColorFormat) / 8;
+    		int size = getPreviewBufferSize(mSelectWidth, mSelectHeight, mSelectColorFormat);
 
-    		mPreviewBuffer = ByteBuffer.allocate(mSelectWidth * mSelectHeight * bytesPerPix * 3 / 2);
-
-        	mCam.addCallbackBuffer(mPreviewBuffer.array());
+    		//mPreviewBuffer = ByteBuffer.allocate(size);
+        	//mCam.addCallbackBuffer(mPreviewBuffer.array());
+    		
+    		//re-create bytes buffer every time. I think the better way is: after stop, camera return all the buffers I give him through "OnPreview" callback.
+    		//Then I can select reuse the bytes buffer or re-create them
+    		if (mPreviewBuffers == null)
+    		{
+    			mPreviewBuffers = new LinkedList<byte[]>();
+    		}
+    		else
+    		{
+    			mPreviewBuffers.clear();
+    		}
+    		for(int i=0;i<5;i++)
+    		{
+    			byte[] mem = new byte[size];
+    			mCam.addCallbackBuffer(mem);	//ByteBuffer.array is a reference, not a copy
+    		}
+    		
 			mCam.setPreviewCallbackWithBuffer(this);
 			Log.i(log_tag,"alloc preview buffer");
     	}
@@ -776,12 +784,14 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	
 	private void stopPreview()
 	{
+		if (mCam == null)
+			return;
 		Log.i(log_tag,"before stopPreview");
 		mCam.stopPreview();
 		Log.i(log_tag,"after stopPreview");
 		
 		if (mUsePreviewBuffer == true)
-			mCam.setPreviewCallbackWithBuffer(null);
+			mCam.setPreviewCallbackWithBuffer(null);	//it will clear all buffers added to camera by me
 		else
 			mCam.setPreviewCallback(null);		
 	}
@@ -1100,45 +1110,46 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					//mAvcEncOutputSuspend = false;
 				}
 			}
-			if (mAvcEnc != null)
-			{
-				int data_size = (int) (mRawWidth * mRawHeight * 1.5);	//hardcode, assume bytes per pixel is 1.5
-				if (data_size <= data.length)
-				{
-					if (format == ImageFormat.YV12)
-					{
-						int[] cs = new int[1];
-						mAvcEnc.queryInt(AvcEncoder.KEY_COLORFORMAT, cs);
-						if (cs[0] == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar)
-						{
-							if (mRawData == null)
-							{
-								mRawData = new byte[data_size];
-							}
-							swapYV12toI420(data, mRawData, mRawWidth, mRawHeight);
-						}
-						else
-						{
-							//I hope the omx default color format is YV12
-							mRawData = data;
-						}
-					}
-					else
-					{
-						Log.e(log_tag, "preview size MUST be YV12, cur is "+format);
-						mRawData = data;
-					}
-					
-					synchronized(mAvcEncLock)
-					{
-						int res = mAvcEnc.InputRawBuffer(mRawData, data_size, System.currentTimeMillis());
-						if (res != 0)
-						{
-							Log.w(log_tag, "onPreviewFrame. mAvcEnc.InputRawBuffer res="+res);
-						}
-					}
-				}
-			}
+//			if (mAvcEnc != null)
+//			{
+//				float bytesPerPix = (float)ImageFormat.getBitsPerPixel(format) / 8;
+//				int data_size = (int) (mRawWidth * mRawHeight * bytesPerPix);
+//				if (data_size <= data.length)
+//				{
+//					if (format == ImageFormat.YV12)
+//					{
+//						int[] cs = new int[1];
+//						mAvcEnc.queryInt(AvcEncoder.KEY_COLORFORMAT, cs);
+//						if (cs[0] == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar)
+//						{
+//							if (mRawData == null)
+//							{
+//								mRawData = new byte[data_size];
+//							}
+//							swapYV12toI420(data, mRawData, mRawWidth, mRawHeight);
+//						}
+//						else
+//						{
+//							//I hope the omx default color format is YV12
+//							mRawData = data;
+//						}
+//					}
+//					else
+//					{
+//						Log.e(log_tag, "preview size MUST be YV12, cur is "+format);
+//						mRawData = data;
+//					}
+//					
+//					synchronized(mAvcEncLock)
+//					{
+//						int res = mAvcEnc.InputRawBuffer(mRawData, data_size, System.currentTimeMillis());
+//						if (res != 0)
+//						{
+//							Log.w(log_tag, "onPreviewFrame. mAvcEnc.InputRawBuffer res="+res);
+//						}
+//					}
+//				}
+//			}
 		}
 		
 		
@@ -1146,7 +1157,17 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		
 		if (mUsePreviewBuffer == true)
 		{
-			camera.addCallbackBuffer(data);
+			if (mEnableVideoEncode == true)
+			{
+				synchronized(mAvcEncLock) {
+					mPreviewBuffers.add(data);
+					
+					Log.d(log_tag, "onpreview, return buffer to list. pb size is"+mPreviewBuffers.size());
+				}
+			}
+			else {
+				camera.addCallbackBuffer(data);
+			}
 		}
 		
 //			 FileOutputStream outStream = null;
@@ -1318,75 +1339,129 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					switch (msg.what) {
 						case EVENT_GET_ENCODE_OUTPUT:
 						{
-							//if (mAvcEncOutputSuspend == false)
+							if (mAvcEnc != null)
 							{
 								synchronized(mAvcEncLock) {
-									if (mAvcEnc != null)
+									int res = AvcEncoder.R_BUFFER_OK;
+									
+									//STEP 1: handle input buffer
+									Iterator<byte[]> ite = mPreviewBuffers.iterator();
+									while (ite.hasNext())
 									{
-										int res = AvcEncoder.R_BUFFER_OK;
-										while(res == AvcEncoder.R_BUFFER_OK)
+										byte[] data = ite.next();
+										
+										int data_size = getPreviewBufferSize(mRawWidth, mRawHeight, mSelectColorFormat);
+										if (data_size <= data.length)
 										{
-											int[] len = new int[1];
-											len[0] = mAvcBuf.length;
-											res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len);
-											if (res == AvcEncoder.R_INVALIDATE_BUFFER_SIZE)
+											if (mSelectColorFormat == ImageFormat.YV12)
 											{
-												//mAvcBuf should be refreshed
-												len[0] = mAvcBuf.length;
-												res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len);
-											}
-											
-											if (res == AvcEncoder.R_BUFFER_OK)
-											{
-												//TODO:
-												//write avc to file, or calc the fps
-												if(mAvcGotoFile == true)
+												int[] cs = new int[1];
+												mAvcEnc.queryInt(AvcEncoder.KEY_COLORFORMAT, cs);
+												if (cs[0] == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar)
 												{
-													if(mFOS != null)
+													if (mRawData == null || 
+															mRawData.length < data_size)
 													{
-														try {
-															mFOS.write(mAvcBuf, 0, len[0]);
-														} catch (IOException e) {
-															// TODO Auto-generated catch block
-															e.printStackTrace();
-														}
+														mRawData = new byte[data_size];
 													}
+													swapYV12toI420(data, mRawData, mRawWidth, mRawHeight);
 												}
-												
-												mEncBytesPerSecond += len[0];
-												mEncCountPerSecond++;
-												if (mAvcEncodeFirstOutputGap_starttick != 0)
+												else
 												{
-													long tick = System.currentTimeMillis();
-													Log.i("AvcEncoder", "first Avc encoder output gap is "+(tick - mAvcEncodeFirstOutputGap_starttick));
-													mAvcEncodeFirstOutputGap_starttick = 0;
-												}
-												
-												Log.i(log_tag, "get encoded data, len="+len[0]);
-											}
-											else if (res == AvcEncoder.R_OUTPUT_UPDATE)
-											{
-												res = AvcEncoder.R_BUFFER_OK;
-											}
-											else if (res == AvcEncoder.R_TRY_AGAIN_LATER)
-											{
-												try {
-													Thread.sleep(10);
-												} catch (InterruptedException e) {
-													// TODO Auto-generated catch block
-													e.printStackTrace();
+													//I hope the omx default color format is YV12
+													mRawData = data;
 												}
 											}
 											else
 											{
-												//not possible from Android doc
+												Log.e(log_tag, "preview size MUST be YV12, cur is "+mSelectColorFormat);
+												mRawData = data;
+											}
+											
+
+											res = mAvcEnc.InputRawBuffer(mRawData, data_size, System.currentTimeMillis());
+											if (res != AvcEncoder.R_BUFFER_OK)
+											{
+												Log.w(log_tag, "mAvcEnc.InputRawBuffer, maybe wrong:"+res);
+												break;		//the rest buffers shouldn't go into encoder, if the previous one get problem 
+											}
+											else
+											{
+												Log.d(log_tag, "EVENT_GET_ENCODE_OUTPUT, handle input buffer once. pb size is"+mPreviewBuffers.size());
+												if (mCam != null)
+												{
+													mCam.addCallbackBuffer(data);
+												}
+												ite.remove();
 											}
 										}
 									}
+									
+									
+									//STEP 2: handle output buffer
+									while(res == AvcEncoder.R_BUFFER_OK)
+									{
+										int[] len = new int[1];
+										len[0] = mAvcBuf.length;
+										res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len);
+										if (res == AvcEncoder.R_INVALIDATE_BUFFER_SIZE)
+										{
+											//mAvcBuf should be refreshed
+											len[0] = mAvcBuf.length;
+											res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len);
+										}
+										
+										if (res == AvcEncoder.R_BUFFER_OK)
+										{
+											//TODO:
+											//write avc to file, or calc the fps
+											if(mAvcGotoFile == true)
+											{
+												if(mFOS != null)
+												{
+													try {
+														mFOS.write(mAvcBuf, 0, len[0]);
+													} catch (IOException e) {
+														// TODO Auto-generated catch block
+														e.printStackTrace();
+													}
+												}
+											}
+											
+											mEncBytesPerSecond += len[0];
+											mEncCountPerSecond++;
+											if (mAvcEncodeFirstOutputGap_starttick != 0)
+											{
+												long tick = System.currentTimeMillis();
+												Log.i("AvcEncoder", "first Avc encoder output gap is "+(tick - mAvcEncodeFirstOutputGap_starttick));
+												mAvcEncodeFirstOutputGap_starttick = 0;
+											}
+											
+											//Log.i(log_tag, "get encoded data, len="+len[0]);
+										}
+										else if (res == AvcEncoder.R_OUTPUT_UPDATE)
+										{
+											res = AvcEncoder.R_BUFFER_OK;
+										}
+										else if (res == AvcEncoder.R_TRY_AGAIN_LATER)
+										{
+//											try {
+//												Thread.sleep(1);
+//											} catch (InterruptedException e) {
+//												// TODO Auto-generated catch block
+//												e.printStackTrace();
+//											}
+										}
+										else
+										{
+											//not possible from Android doc
+										}
+									}
+									
 								}
 							}
 							
-							m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_GET_ENCODE_OUTPUT, 20);
+							m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_GET_ENCODE_OUTPUT, 30);
 						}
 						break;
 
