@@ -78,8 +78,8 @@ public class AvcEncoder
 	    for (int i = 0; i < capabilities.colorFormats.length && mPrimeColorFormat == 0; i++) {
 	        int format = capabilities.colorFormats[i];
 	        switch (format) {
-	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:				/*I420 --- Nvidia Tegra 3, Samsung Exynos */
-	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedPlanar:		/*yv12 --- Qualcomm Adreno */
+	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:				/*I420 --- YUV4:2:0 --- Nvidia Tegra 3, Samsung Exynos */
+	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedPlanar:		/*yv12 --- YVU4:2:0 --- Qualcomm Adreno */
 	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:			/*NV12*/
 	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedSemiPlanar:	/*NV21 --- TI OMAP */
 	        case MediaCodecInfo.CodecCapabilities.COLOR_TI_FormatYUV420PackedSemiPlanar:
@@ -245,13 +245,13 @@ public class AvcEncoder
 			
 			if (capacity < len)
 			{
-				mMC.queueInputBuffer(inputbufferindex, 0, 0, 0, 0); 	//return the buffer to OMX quickly
+				mMC.queueInputBuffer(inputbufferindex, 0, 0, timestamp, 0); 	//return the buffer to OMX quickly
 				Log.e("AvcEncoder", "InputRawBuffer, input size invalidate, capacity="+capacity+",len="+len);
 				return R_INVALIDATE_BUFFER_SIZE;
 			}
 			
 			inputBuffer.put(bytes, 0, len);
-			mMC.queueInputBuffer(inputbufferindex, 0, len, 0, 0);
+			mMC.queueInputBuffer(inputbufferindex, 0, len, timestamp, 0);
 			
 			//Log.i("AvcEncoder", "InputRawBuffer -- OK, capacity="+capacity);
 		}
@@ -276,7 +276,8 @@ public class AvcEncoder
 	}
 	
 	//usage: int[] len = new int[1];
-	public int OutputAvcBuffer(/*out*/byte[] bytes, /*in, out*/int[] len)
+	//long[] ts = new long[1];
+	public int OutputAvcBuffer(/*out*/byte[] bytes, /*in, out*/int[] len, long[] timestamp)
 	{
 		//Log.i("AvcEncoder", "OutputAvcBuffer ++");
 		if (mOutputBytesInStore != null)
@@ -314,6 +315,7 @@ public class AvcEncoder
 			}
 			mOutputBuffers[outputbufferindex].get(bytes, 0, mBI.size);
 			len[0] = mBI.size ;
+			timestamp[0] = mBI.presentationTimeUs;
 			mMC.releaseOutputBuffer(outputbufferindex, false);
 			
 			//Log.i("AvcEncoder", "OutputAvcBuffer -- OK at "+ outputbufferindex+", size="+len[0]);
@@ -341,7 +343,7 @@ public class AvcEncoder
 		}
 		else if (outputbufferindex == MediaCodec.INFO_TRY_AGAIN_LATER)
 		{
-			Log.i("AvcEncoder", "OutputAvcBuffer -- INFO_TRY_AGAIN_LATER");
+			//Log.i("AvcEncoder", "OutputAvcBuffer -- INFO_TRY_AGAIN_LATER");
 //			try {
 //				Thread.sleep(10);
 //			} catch (InterruptedException e) {

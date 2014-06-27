@@ -136,7 +136,13 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     int	mPeriodKeyFrame = -1;	//ms
     private FileOutputStream mFOS = null;
     byte[] mRawData = null;
-    Queue<byte[]> mPreviewBuffers = null;
+    Queue<PreviewBufferInfo> mPreviewBuffers_clean = null;
+    Queue<PreviewBufferInfo> mPreviewBuffers_dirty = null;
+    private final int PREVIEW_POOL_CAPACITY = 5;
+    long mPreviewBufferSize = 0;
+    long mDelay_lastPreviewTick = 0;
+    long mDelay_lastEncodeTick = 0;
+    
     
     //private boolean mAvcEncOutputSuspend = false;
     
@@ -261,6 +267,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
+            			mBtnSetparam.setEnabled(false);
             			mBtnTestFPS.setText("Stop");
             			mTestingFPS = true;
             			m_bStartPreview = true;
@@ -272,7 +279,22 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
             				try {
             					
             					stopPreview();
-	            				
+            					
+            					if (mUsePreviewBuffer == true)
+            					{
+            						mCam.setPreviewCallbackWithBuffer(null);	//it will clear all buffers added to camera by me
+            						synchronized(mAvcEncLock) {
+	            						mPreviewBuffers_clean.clear();
+	            						mPreviewBuffers_clean = null;
+	            						mPreviewBuffers_dirty.clear();
+	            						mPreviewBuffers_dirty = null;
+            						}
+            						mPreviewBufferSize = 0;
+            						
+            					}
+            					mDelay_lastEncodeTick = 0;
+        						mDelay_lastPreviewTick = 0;
+            					
 	            				Log.i(log_tag, "before camera release");
 	            				mCam.release();
 	            				Log.i(log_tag, "after camera release");
@@ -283,6 +305,8 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
             				}
             				mCam = null;
             			}
+            			
+            			mBtnSetparam.setEnabled(true);
             			mBtnTestFPS.setText("Begin test");
             			mTestingFPS = false;
             			m_bStartPreview = false;
@@ -386,8 +410,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	mAvcGotoFile = false;		//really for debug, write files
     	mRawHeight = 0;
     	mRawWidth = 0;
-    	mEncode_fps = 18;
-    	mEncode_bps = 440000;
+    	mEncode_fps = 30;
+    	mEncode_bps = 600000;
+    	mPreviewBuffers_clean = new LinkedList<PreviewBufferInfo>();
+    	mPreviewBuffers_dirty = new LinkedList<PreviewBufferInfo>();
     	
     	
     	mCBVideoEncode = (CheckBox)findViewById(R.id.checkBoxEnableVideoEncode);
@@ -410,7 +436,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					break;
 					
 				case EVENT_CALC_ENCODE_FPS:
-					setEncodeFPS_TextView(mEncCountPerSecond, mRawWidth, mRawHeight, mEncBytesPerSecond*8);
+					setEncodeFPS_TextView(mEncCountPerSecond, mRawWidth, mRawHeight, mEncBytesPerSecond*8, (int)(mDelay_lastPreviewTick - mDelay_lastEncodeTick));
 					mEncCountPerSecond = 0;
 					mEncBytesPerSecond = 0;
 					sendEmptyMessageDelayed(EVENT_CALC_ENCODE_FPS, 1000);
@@ -547,11 +573,22 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	if (mCam != null)
 		{
     		Log.i(log_tag, "onPause, before stopPreview");
-			mCam.stopPreview();
-    		if (mUsePreviewBuffer == true)
-				mCam.setPreviewCallbackWithBuffer(null);
-			else
-				mCam.setPreviewCallback(null);
+			stopPreview();
+			
+			if (mUsePreviewBuffer == true)
+			{
+				mCam.setPreviewCallbackWithBuffer(null);	//it will clear all buffers added to camera by me
+				synchronized(mAvcEncLock) {
+					mPreviewBuffers_clean.clear();
+					mPreviewBuffers_clean = null;
+					mPreviewBuffers_dirty.clear();
+					mPreviewBuffers_dirty = null;
+				}
+				mPreviewBufferSize = 0;
+				
+			}
+			mDelay_lastEncodeTick = 0;
+			mDelay_lastPreviewTick = 0;
 			
 			Log.i(log_tag, "onPause, before release");
 			mCam.release();
@@ -565,7 +602,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		
 		if (mEnableVideoEncode == true)
 		{
-			setEncodeFPS_TextView(0, 0, 0, 0);
+			setEncodeFPS_TextView(0, 0, 0, 0, 0);
 			if (mEventHandler != null)
 			{
 				mEventHandler.removeMessages(EVENT_CALC_ENCODE_FPS);
@@ -622,38 +659,38 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	    	{
 	    		setCameraDisplayOrientation(this, camIndex, mCam);
 	    	}
-	    	else
-	    	{
-			    mCam.stopPreview();
-			    setCaptureFPS_TextView(0, 0, 0);
-			    if (sdkInt >= 9)
-			    {
-			    	setCameraDisplayOrientation(this, camIndex, mCam);
-			    }
-			    if (mUsePreviewBuffer == true)
-    				mCam.setPreviewCallbackWithBuffer(this);
-    			else
-    				mCam.setPreviewCallback(this);
-		    	mCam.startPreview(); 
-	    	}
+//	    	else
+//	    	{
+//			    mCam.stopPreview();
+//			    setCaptureFPS_TextView(0, 0, 0);
+//			    if (sdkInt >= 9)
+//			    {
+//			    	setCameraDisplayOrientation(this, camIndex, mCam);
+//			    }
+//			    if (mUsePreviewBuffer == true)
+//    				mCam.setPreviewCallbackWithBuffer(this);
+//    			else
+//    				mCam.setPreviewCallback(this);
+//		    	mCam.startPreview(); 
+//	    	}
 	    }
 	}
 	
-	@Override
-	public boolean onKeyDown(int keyCode, KeyEvent event) {
-		switch (keyCode) {
-		case KeyEvent.KEYCODE_BACK:
-			if (mCam != null)
-			{
-				stopPreview();
-				
-				mCam.release();
-				mCam = null;
-			}
-			break;
-		}
-		return super.onKeyDown(keyCode, event);
-	}
+//	@Override
+//	public boolean onKeyDown(int keyCode, KeyEvent event) {
+//		switch (keyCode) {
+//		case KeyEvent.KEYCODE_BACK:
+//			if (mCam != null)
+//			{
+//				stopPreview();
+//				
+//				mCam.release();
+//				mCam = null;
+//			}
+//			break;
+//		}
+//		return super.onKeyDown(keyCode, event);
+//	}
 	
 	public static void setCameraDisplayOrientation(Activity activity, int cameraId, android.hardware.Camera camera) 
 	{     
@@ -745,28 +782,50 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	
     	if (mUsePreviewBuffer == true)
     	{
+    		if (mPreviewBuffers_clean == null)
+    			mPreviewBuffers_clean = new LinkedList<PreviewBufferInfo>();
+    		if (mPreviewBuffers_dirty == null)
+    			mPreviewBuffers_dirty = new LinkedList<PreviewBufferInfo>();
+    		
     		int size = getPreviewBufferSize(mSelectWidth, mSelectHeight, mSelectColorFormat);
 
-    		//mPreviewBuffer = ByteBuffer.allocate(size);
-        	//mCam.addCallbackBuffer(mPreviewBuffer.array());
-    		
-    		//re-create bytes buffer every time. I think the better way is: after stop, camera return all the buffers I give him through "OnPreview" callback.
-    		//Then I can select reuse the bytes buffer or re-create them
-    		if (mPreviewBuffers == null)
+    		if (size > mPreviewBufferSize)
     		{
-    			mPreviewBuffers = new LinkedList<byte[]>();
+    			mPreviewBufferSize = size;
+    			//call of "setPreviewCallbackWithBuffer(null)" will clear the buffers we passed to camera(it is the only way to clear buffers, until Android4.4),
+    			//but "stopPreview" will not clear buffers
+    			mCam.setPreviewCallbackWithBuffer(null); 	//it OK to call even for the first time
+    			//discard the buffers we just used before
+    			mPreviewBuffers_clean.clear();
+    			mPreviewBuffers_dirty.clear();
+    			
+    			for(int i=0;i<PREVIEW_POOL_CAPACITY;i++)
+        		{
+        			byte[] mem = new byte[size];
+        			mCam.addCallbackBuffer(mem);	//ByteBuffer.array is a reference, not a copy
+        			
+        			PreviewBufferInfo info = new PreviewBufferInfo();
+        			info.buffer = null;
+        			info.timestamp = 0;
+        			mPreviewBuffers_clean.add(info);
+        		}
+    			
     		}
     		else
     		{
-    			mPreviewBuffers.clear();
+    			//TODO: return the rest of dirty buffer to camera
+    			Log.i(log_tag, "startPreview, should I return the rest of dirty to camera?");
+    			Log.i(log_tag, "dirty size:"+mPreviewBuffers_dirty.size()+", clean size:"+mPreviewBuffers_clean.size());
+    			Iterator<PreviewBufferInfo> ite = mPreviewBuffers_dirty.iterator();
+    			while(ite.hasNext())
+    			{
+    				PreviewBufferInfo info = ite.next();
+    				mPreviewBuffers_clean.add(info);
+    				ite.remove();
+    			}
     		}
-    		for(int i=0;i<5;i++)
-    		{
-    			byte[] mem = new byte[size];
-    			mCam.addCallbackBuffer(mem);	//ByteBuffer.array is a reference, not a copy
-    		}
-    		
-			mCam.setPreviewCallbackWithBuffer(this);
+    		mCam.setPreviewCallbackWithBuffer(this);	//call it every time, to make sure the camera is in right status: CAMERA_FRAME_CALLBACK_FLAG_CAMERA
+
 			Log.i(log_tag,"alloc preview buffer");
     	}
 		else
@@ -790,9 +849,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		mCam.stopPreview();
 		Log.i(log_tag,"after stopPreview");
 		
-		if (mUsePreviewBuffer == true)
-			mCam.setPreviewCallbackWithBuffer(null);	//it will clear all buffers added to camera by me
-		else
+		if (mUsePreviewBuffer == false)
 			mCam.setPreviewCallback(null);		
 	}
 	
@@ -849,10 +906,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	tv.setText("Capture FPS:"+String.valueOf(fps)+", "+String.valueOf(w)+"x"+String.valueOf(h));
     }
     
-    private void setEncodeFPS_TextView(int fps, int w, int h, int bps)
+    private void setEncodeFPS_TextView(int fps, int w, int h, int bps, int delay)
     {
     	TextView tv = (TextView)findViewById(R.id.textview_encodefps);
-    	tv.setText("Encode FPS:"+String.valueOf(fps)+", "+String.valueOf(w)+"x"+String.valueOf(h)+", "+bps+"bps");
+    	tv.setText("Encode FPS:"+String.valueOf(fps)+", "+String.valueOf(w)+"x"+String.valueOf(h)+", "+bps+"bps"+",delay:"+delay+"ms");
     }
     
     private void TestSpecifiedParam(CameraInfoCollector collector, List<Rect> list_rect)
@@ -904,6 +961,28 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     		
     		ListPreviewSizes = collector.getSupportedPreviewSizes(true);
     		
+    		////////////////////CAUTION: for YV12, the preview buffer size is not always w*h*1.5
+    		/*
+    		 * If the width of preview picture is 32 alignment, the preview buffer size is exactly w*h*1.5
+    		 * If the width is not 32 alignment, the preview buffer size is bigger than w*h*1.5
+    		 * In the second case, the preview buffer size is probably bigger than the MediaCodec input buffer, which cannot be handled by programmers
+    		 * Acturally, the MediaCodec input buffer is not exactly w*h*1.5, it may be a little bit bigger than that. But may be still smaller than preview buffer
+    		 * A easy way to avoid the mismatch of preview buffer and input buffer, to avoid a data copy, is that we only select the 32 alignment width.
+    		 * 
+    		 * */
+    		Iterator ite = ListPreviewSizes.iterator();
+    		while(ite.hasNext())
+    		{
+    			Size siz = (Size) ite.next();
+    			if (Math.ceil(siz.width/32.0) * 32 > siz.width)
+    			{
+    				ite.remove();
+    			}
+    		}
+    		
+    		
+    		
+    		
     		//copy the List
     		ListPreviewFormats_dst.clear();
     		for(Integer inte:ListPreviewFormats)
@@ -929,12 +1008,12 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     		}
     		
     		ListPreviewSizes_dst.clear();
-    		for (Size siz:ListPreviewSizes)
+    		for (Size siz1:ListPreviewSizes)
     		{
     			//ziyzhang: cannot use the inner class Size, so use a 2-element array instead
     			int[] siz_wh = new int[2];
-    			siz_wh[0] = siz.width;
-    			siz_wh[1] = siz.height;
+    			siz_wh[0] = siz1.width;
+    			siz_wh[1] = siz1.height;
     			if (!ListPreviewSizes_dst.contains(siz_wh))
     			{
     				ListPreviewSizes_dst.add(siz_wh);
@@ -1089,7 +1168,6 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					mEventHandler.sendEmptyMessage(EVENT_CALC_ENCODE_FPS);
 					
 					synchronized(mAvcEncLock) {
-						mAvcEncodeFirstOutputGap_starttick = System.currentTimeMillis();
 						mAvcEnc.stop();
 						mAvcEnc.tryConfig(mRawWidth, mRawHeight, mEncode_fps, mEncode_bps);
 						mAvcEnc.start();
@@ -1107,9 +1185,12 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 						}
 					}
 					
+					mAvcEncodeFirstOutputGap_starttick = System.currentTimeMillis();
 					//mAvcEncOutputSuspend = false;
 				}
 			}
+			
+			
 //			if (mAvcEnc != null)
 //			{
 //				float bytesPerPix = (float)ImageFormat.getBitsPerPixel(format) / 8;
@@ -1160,10 +1241,20 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 			if (mEnableVideoEncode == true)
 			{
 				synchronized(mAvcEncLock) {
-					mPreviewBuffers.add(data);
+					if (mPreviewBuffers_clean.isEmpty() == false)	//impossible to be empty, :-)
+					{
+						PreviewBufferInfo info = mPreviewBuffers_clean.poll();	//remove the head of queue
+						info.buffer = data;
+						info.timestamp = System.currentTimeMillis();
+						mPreviewBuffers_dirty.add(info);
+					}
 					
-					Log.d(log_tag, "onpreview, return buffer to list. pb size is"+mPreviewBuffers.size());
+					//Log.d(log_tag, "onpreview, return buffer to list. dirty size is"+mPreviewBuffers_dirty.size());
 				}
+
+				//debug for delay
+				mDelay_lastPreviewTick = System.currentTimeMillis();
+				
 			}
 			else {
 				camera.addCallbackBuffer(data);
@@ -1271,7 +1362,9 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					mRawHeight = 0;
 					mEncCountPerSecond = 0;
 					mEncBytesPerSecond = 0;
-					setEncodeFPS_TextView(0, mRawWidth, mRawHeight, 0);
+					mDelay_lastEncodeTick = 0;
+					mDelay_lastPreviewTick = 0;
+					setEncodeFPS_TextView(0, mRawWidth, mRawHeight, 0, 0);
 				}
 				
 				
@@ -1345,14 +1438,15 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 									int res = AvcEncoder.R_BUFFER_OK;
 									
 									//STEP 1: handle input buffer
-									Iterator<byte[]> ite = mPreviewBuffers.iterator();
-									while (ite.hasNext())
+									if (mPreviewBuffers_dirty != null && mPreviewBuffers_clean != null)
 									{
-										byte[] data = ite.next();
-										
-										int data_size = getPreviewBufferSize(mRawWidth, mRawHeight, mSelectColorFormat);
-										if (data_size <= data.length)
+										Iterator<PreviewBufferInfo> ite = mPreviewBuffers_dirty.iterator();
+										while (ite.hasNext())
 										{
+											PreviewBufferInfo info = ite.next();
+											byte[] data = info.buffer;
+											
+											int data_size = getPreviewBufferSize(mRawWidth, mRawHeight, mSelectColorFormat);
 											if (mSelectColorFormat == ImageFormat.YV12)
 											{
 												int[] cs = new int[1];
@@ -1379,7 +1473,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 											}
 											
 
-											res = mAvcEnc.InputRawBuffer(mRawData, data_size, System.currentTimeMillis());
+											res = mAvcEnc.InputRawBuffer(mRawData, data_size, info.timestamp);
 											if (res != AvcEncoder.R_BUFFER_OK)
 											{
 												Log.w(log_tag, "mAvcEnc.InputRawBuffer, maybe wrong:"+res);
@@ -1387,12 +1481,13 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 											}
 											else
 											{
-												Log.d(log_tag, "EVENT_GET_ENCODE_OUTPUT, handle input buffer once. pb size is"+mPreviewBuffers.size());
+												ite.remove();
+												mPreviewBuffers_clean.add(info);
 												if (mCam != null)
 												{
 													mCam.addCallbackBuffer(data);
 												}
-												ite.remove();
+												//Log.d(log_tag, "EVENT_GET_ENCODE_OUTPUT, handle input buffer once. clean size is"+mPreviewBuffers_clean.size());
 											}
 										}
 									}
@@ -1403,12 +1498,13 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 									{
 										int[] len = new int[1];
 										len[0] = mAvcBuf.length;
-										res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len);
+										long[] ts = new long[1];
+										res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len, ts);
 										if (res == AvcEncoder.R_INVALIDATE_BUFFER_SIZE)
 										{
 											//mAvcBuf should be refreshed
 											len[0] = mAvcBuf.length;
-											res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len);
+											res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len, ts);
 										}
 										
 										if (res == AvcEncoder.R_BUFFER_OK)
@@ -1430,12 +1526,16 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 											
 											mEncBytesPerSecond += len[0];
 											mEncCountPerSecond++;
+											
 											if (mAvcEncodeFirstOutputGap_starttick != 0)
 											{
 												long tick = System.currentTimeMillis();
 												Log.i("AvcEncoder", "first Avc encoder output gap is "+(tick - mAvcEncodeFirstOutputGap_starttick));
 												mAvcEncodeFirstOutputGap_starttick = 0;
 											}
+											
+											//debug for delay
+											mDelay_lastEncodeTick = ts[0];
 											
 											//Log.i(log_tag, "get encoded data, len="+len[0]);
 										}
@@ -1504,5 +1604,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
         System.arraycopy(yv12bytes, width*height+width*height/4, i420bytes, width*height, width*height/4);  
         System.arraycopy(yv12bytes, width*height, i420bytes, width*height+width*height/4, width*height/4);    
     } 
+    
+    private class PreviewBufferInfo
+    {
+    	public byte[] buffer;
+    	public long timestamp;
+    }
     
 }

@@ -115,7 +115,7 @@
         android:id="@+id/FPSedit"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:hint="fps"
+        android:hint="30fps"
         android:inputType="number" >
     </EditText>
     
@@ -123,7 +123,7 @@
         android:id="@+id/BPSedit"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:hint="kbps"
+        android:hint="600kbps"
         android:inputType="number" >
     </EditText>
     
