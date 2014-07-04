@@ -42,6 +42,7 @@ public class AvcEncoder
 	private final int BUFFER_TIMEOUT = 0; //microseconds
 	private BufferInfo mBI = null;
 	private byte[] mOutputBytesInStore = null;
+	private long mOutputBytesInStore_timestamp = 0;
 	private int mPrimeColorFormat = 0; //0 is not listed in Android doc, as MediaCodecInfo.CodecCapabilities
 	private int mStatus = STATUS_INVALID;
 	
@@ -227,7 +228,7 @@ public class AvcEncoder
 			mMC.setParameters(b);
 	}
 	
-	public int InputRawBuffer(/*in*/byte[] bytes, /*in*/int len, long timestamp)
+	public int InputRawBuffer(/*in*/byte[] bytes, /*in*/int len, /*in*/long timestamp)
 	{
 		//Log.i("AvcEncoder", "InputRawBuffer ++");
 		
@@ -277,7 +278,7 @@ public class AvcEncoder
 	
 	//usage: int[] len = new int[1];
 	//long[] ts = new long[1];
-	public int OutputAvcBuffer(/*out*/byte[] bytes, /*in, out*/int[] len, long[] timestamp)
+	public int OutputAvcBuffer(/*out*/byte[] bytes, /*in, out*/int[] len, /*out*/long[] timestamp)
 	{
 		//Log.i("AvcEncoder", "OutputAvcBuffer ++");
 		if (mOutputBytesInStore != null)
@@ -293,6 +294,9 @@ public class AvcEncoder
 				Log.i("AvcEncoder", "OutputAvcBuffer, play the buffer in store, len is "+ mOutputBytesInStore.length);
 				System.arraycopy(mOutputBytesInStore, 0, bytes, 0, mOutputBytesInStore.length);
 				len[0] = mOutputBytesInStore.length;
+				timestamp[0] = mOutputBytesInStore_timestamp;
+				
+				mOutputBytesInStore_timestamp = 0;
 				mOutputBytesInStore = null;
 				return R_BUFFER_OK;
 			}
@@ -309,6 +313,7 @@ public class AvcEncoder
 				Log.w("AvcEncoder", "OutputAvcBuffer, len is too small, requre at least "+ mBI.size);
 				mSink.onUpdateOutputBufferSize(mBI.size);
 				mOutputBytesInStore = new byte[mBI.size];
+				mOutputBytesInStore_timestamp = mBI.presentationTimeUs;
 				mOutputBuffers[outputbufferindex].get(mOutputBytesInStore);
 				mMC.releaseOutputBuffer(outputbufferindex, false);
 				return R_INVALIDATE_BUFFER_SIZE;

@@ -127,6 +127,12 @@
         android:inputType="number" >
     </EditText>
     
+    <CheckBox
+            android:id="@+id/checkBoxVideoDecode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Decode" />
+    
     </LinearLayout>
 
     <LinearLayout
