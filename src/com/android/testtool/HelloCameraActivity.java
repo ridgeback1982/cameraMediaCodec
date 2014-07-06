@@ -31,6 +31,7 @@ import android.hardware.Camera.CameraInfo;
 import android.hardware.Camera.Parameters;
 import android.hardware.Camera.PreviewCallback;
 import android.hardware.Camera.Size;
+import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaRecorder;
 import android.os.Build;
@@ -633,7 +634,20 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 			m_CodecMsgHandler.removeMessages(EVENT_REQUEST_KEY_FRAME);
 			m_CodecMsgHandler.removeMessages(EVENT_GET_ENCODE_OUTPUT);
 			m_CodecMsgHandler.removeMessages(EVENT_GO_DECODE);
-			m_CodecMsgHandler.getLooper().quit();
+			if (Build.VERSION.SDK_INT < 18)
+			{
+				//[Doc]Using this method may be unsafe because some messages may not be delivered before the looper terminates. 
+				m_CodecMsgHandler.getLooper().quit();
+				try {
+					Thread.sleep(50);
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			else {
+				m_CodecMsgHandler.getLooper().quitSafely();
+			}
     	}
 		m_codec_thread = null;
 		
@@ -1383,7 +1397,20 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 						m_CodecMsgHandler.removeMessages(EVENT_REQUEST_KEY_FRAME);
 						m_CodecMsgHandler.removeMessages(EVENT_GET_ENCODE_OUTPUT);
 						m_CodecMsgHandler.removeMessages(EVENT_GO_DECODE);
-						m_CodecMsgHandler.getLooper().quit();
+						if (Build.VERSION.SDK_INT < 18)
+						{
+							//[Doc]Using this method may be unsafe because some messages may not be delivered before the looper terminates.
+							m_CodecMsgHandler.getLooper().quit();
+							try {
+								Thread.sleep(50);
+							} catch (InterruptedException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+						}
+						else {
+							m_CodecMsgHandler.getLooper().quitSafely();
+						}
 			    	}
 					m_codec_thread = null;
 					
@@ -1432,6 +1459,14 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		    		
 		    		mAvcDec = new AvcDecoder();
 		    		mAvcDec.Init();
+		    		
+		    		if (m_CodecMsgHandler != null)
+		    		{
+						if (m_CodecMsgHandler.hasMessages(EVENT_GO_DECODE) == false)
+						{
+							m_CodecMsgHandler.sendEmptyMessage(EVENT_GO_DECODE);
+						}
+		    		}
 				}
 				else
 				{
@@ -1501,7 +1536,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 						{
 							if (mAvcEnc != null)
 							{
-								int res = AvcEncoder.R_BUFFER_OK;
+								int res = AvcEncoder.R_TRY_AGAIN_LATER;
 								synchronized(mAvcEncLock) {
 									//STEP 1: handle input buffer
 									if (mPreviewBuffers_dirty != null && mPreviewBuffers_clean != null)
@@ -1558,7 +1593,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 									}
 								}
 									
-									//STEP 2: handle output buffer
+								//STEP 2: handle output buffer
 								while(res == AvcEncoder.R_BUFFER_OK)
 								{
 									int[] len = new int[1];
@@ -1626,98 +1661,6 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 													}
 												}
 											}
-											
-											if (mAvcDec != null)
-											{
-												//ASSUME: 
-												//A. there is no sub sps, appending to sps
-												//B. sps/pps is appended to frame when size changes
-												//TODO: 
-												//1. check the AVC data, to find SPS/PPS. Is it low performance?
-												byte[] sps_nal = null;
-												int sps_len = 0;
-												byte[] pps_nal = null;
-												int pps_len = 0;
-												ByteBuffer byteb = ByteBuffer.wrap(mAvcBuf, 0, len[0]);
-												//SPS
-												if (true == AvcUtils.goToPrefix(byteb))
-												{
-													int sps_position = 0;
-													int pps_position = 0;
-													int nal_type = AvcUtils.getNalType(byteb);
-													if (AvcUtils.NAL_TYPE_SPS == nal_type)
-													{
-														Log.d(log_tag, "OutputAvcBuffer, AVC NAL type: SPS");
-														sps_position = byteb.position() - AvcUtils.START_PREFIX_LENGTH - AvcUtils.NAL_UNIT_HEADER_LENGTH;
-														//PPS
-														if (true == AvcUtils.goToPrefix(byteb))
-														{
-															nal_type = AvcUtils.getNalType(byteb);
-															if (AvcUtils.NAL_TYPE_PPS == nal_type)
-															{
-																pps_position = byteb.position() - AvcUtils.START_PREFIX_LENGTH - AvcUtils.NAL_UNIT_HEADER_LENGTH;
-																sps_len = pps_position - sps_position;
-																sps_nal = new byte[sps_len];
-																int cur_pos = byteb.position();
-																byteb.position(sps_position);
-																byteb.get(sps_nal, 0, sps_len);
-																byteb.position(cur_pos);
-																//slice
-																if (true == AvcUtils.goToPrefix(byteb))
-																{
-																	nal_type = AvcUtils.getNalType(byteb);
-																	int pps_end_position = byteb.position() - AvcUtils.START_PREFIX_LENGTH - AvcUtils.NAL_UNIT_HEADER_LENGTH;
-																	pps_len = pps_end_position - pps_position;
-																}
-																else {
-																	pps_len = byteb.position() - pps_position;
-																	//pps_len = byteb.limit() - pps_position + 1;
-																}
-																if (pps_len > 0)
-																{
-																	pps_nal = new byte[pps_len];
-																	cur_pos = byteb.position();
-																	byteb.position(pps_position);
-																	byteb.get(pps_nal, 0, pps_len);
-																	byteb.position(cur_pos);
-																}
-															}
-															else{
-																//Log.d(log_tag, "OutputAvcBuffer, AVC NAL type: "+nal_type);
-																throw new UnsupportedOperationException("SPS is not followed by PPS, nal type :"+nal_type);
-															}
-														}
-													}
-													else{
-														//Log.d(log_tag, "OutputAvcBuffer, AVC NAL type: "+nal_type);
-													}
-													
-													//2. configure AVC decoder with SPS/PPS
-													if (sps_nal != null && pps_nal != null)
-													{
-														
-														int[] width = new int[1];
-														int[] height = new int[1];
-														AvcUtils.parseSPS(sps_nal, width, height);
-														if (mCurAvcDecoderWidth < width[0] || mCurAvcDecoderHeight < height[0])
-														{
-															mCurAvcDecoderWidth = width[0];
-															mCurAvcDecoderHeight = height[0];
-														
-															mAvcDec.stop();
-															mAvcDec.tryConfig(mSurfaceDecoder.getHolder().getSurface(), sps_nal, pps_nal);
-															mAvcDec.start();
-															
-															if (m_CodecMsgHandler != null)
-												    		{
-												    			m_CodecMsgHandler.sendEmptyMessage(EVENT_GO_DECODE);
-												    		}
-														}
-													}
-												
-												}
-												
-											}
 										}
 										
 										//Log.i(log_tag, "get encoded data, len="+len[0]);
@@ -1776,7 +1719,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 							if (mAvcDec != null)
 							{
 								synchronized(mAvcDecLock) {
-									int res = AvcDecoder.R_BUFFER_OK;
+									int res = AvcDecoder.R_TRY_AGAIN_LATER;
 									
 									//STEP 1: handle input buffer
 									if (mDecodeBuffers_dirty != null && mDecodeBuffers_clean != null)
@@ -1784,12 +1727,102 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 										Iterator<PreviewBufferInfo> ite = mDecodeBuffers_dirty.iterator();
 										while (ite.hasNext())
 										{
+											int flag = 0;
 											PreviewBufferInfo info = ite.next();
-											res = mAvcDec.InputAvcBuffer(info.buffer, info.size, info.timestamp);
+
+											//ASSUME: 
+											//A. there is no sub sps, appending to sps
+											//B. sps/pps is appended to frame when size changes
+											//TODO: 
+											//1. check the AVC data, to find SPS/PPS. Is it low performance?
+											byte[] sps_nal = null;
+											int sps_len = 0;
+											byte[] pps_nal = null;
+											int pps_len = 0;
+											ByteBuffer byteb = ByteBuffer.wrap(info.buffer, 0, info.size);
+											//SPS
+											if (true == AvcUtils.goToPrefix(byteb))
+											{
+												int sps_position = 0;
+												int pps_position = 0;
+												int nal_type = AvcUtils.getNalType(byteb);
+												if (AvcUtils.NAL_TYPE_SPS == nal_type)
+												{
+													Log.d(log_tag, "Parsing codec frame, AVC NAL type: SPS");
+													sps_position = byteb.position() - AvcUtils.START_PREFIX_LENGTH - AvcUtils.NAL_UNIT_HEADER_LENGTH;
+													//PPS
+													if (true == AvcUtils.goToPrefix(byteb))
+													{
+														nal_type = AvcUtils.getNalType(byteb);
+														if (AvcUtils.NAL_TYPE_PPS == nal_type)
+														{
+															pps_position = byteb.position() - AvcUtils.START_PREFIX_LENGTH - AvcUtils.NAL_UNIT_HEADER_LENGTH;
+															sps_len = pps_position - sps_position;
+															sps_nal = new byte[sps_len];
+															int cur_pos = byteb.position();
+															byteb.position(sps_position);
+															byteb.get(sps_nal, 0, sps_len);
+															byteb.position(cur_pos);
+															//slice
+															if (true == AvcUtils.goToPrefix(byteb))
+															{
+																nal_type = AvcUtils.getNalType(byteb);
+																int pps_end_position = byteb.position() - AvcUtils.START_PREFIX_LENGTH - AvcUtils.NAL_UNIT_HEADER_LENGTH;
+																pps_len = pps_end_position - pps_position;
+															}
+															else {
+																pps_len = byteb.position() - pps_position;
+																//pps_len = byteb.limit() - pps_position;
+															}
+															if (pps_len > 0)
+															{
+																pps_nal = new byte[pps_len];
+																cur_pos = byteb.position();
+																byteb.position(pps_position);
+																byteb.get(pps_nal, 0, pps_len);
+																byteb.position(cur_pos);
+															}
+														}
+														else{
+															//Log.d(log_tag, "Parsing codec frame, AVC NAL type: "+nal_type);
+															throw new UnsupportedOperationException("SPS is not followed by PPS, nal type :"+nal_type);
+														}
+													}
+												}
+												else{
+													//Log.d(log_tag, "Parsing codec frame, AVC NAL type: "+nal_type);
+												}
+												
+												//2. configure AVC decoder with SPS/PPS
+												if (sps_nal != null && pps_nal != null)
+												{
+													int[] width = new int[1];
+													int[] height = new int[1];
+													AvcUtils.parseSPS(sps_nal, width, height);
+													Log.d(log_tag, "Parsing codec frame, get SPS/PPS NAL, mCurAvcDecoderHeight="+mCurAvcDecoderHeight+",height="+height[0]+",mCurAvcDecoderWidth="+mCurAvcDecoderWidth+",width="+width[0]);
+													//if (mCurAvcDecoderWidth < width[0] || mCurAvcDecoderHeight < height[0])
+													if (mCurAvcDecoderWidth != width[0] || mCurAvcDecoderHeight != height[0])
+													{
+														mCurAvcDecoderWidth = width[0];
+														mCurAvcDecoderHeight = height[0];
+													
+														mAvcDec.stop();
+														mAvcDec.tryConfig(mSurfaceDecoder.getHolder().getSurface(), sps_nal, pps_nal);
+														mAvcDec.start();
+													}
+//													else
+//													{
+//														mAvcDec.flush();
+//													}
+													flag = MediaCodec.BUFFER_FLAG_CODEC_CONFIG;
+												}
+											}
+											
+											res = mAvcDec.InputAvcBuffer(info.buffer, info.size, info.timestamp, flag);
 											if (res != AvcDecoder.R_BUFFER_OK)
 											{
 												//Log.w(log_tag, "mAvcDec.InputAvcBuffer, maybe wrong:"+res);
-												break;		//the rest buffers shouldn't go into encoder, if the previous one get problem 
+												break;		//the rest buffers shouldn't go into decoder, if the previous one get problem 
 											}
 											else
 											{
@@ -1797,14 +1830,14 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 												mDecodeBuffers_clean.add(info);
 												//Log.d(log_tag, "EVENT_GO_DECODE, handle input buffer once. clean size is"+mDecodeBuffers_clean.size());
 											}
-										}
-									}
+										}	//while
+									}	//if (mDecodeBuffers_dirty != null && mDecodeBuffers_clean != null)
 									
 									
 									//STEP 2: handle output buffer
 									int[] len = new int[1];
 									long[] ts = new long[1];
-									while(res == AvcEncoder.R_BUFFER_OK)
+									while(res == AvcDecoder.R_BUFFER_OK)
 									{
 										res = mAvcDec.OutputRawBuffer(null, len, ts);
 										
@@ -1835,7 +1868,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 								}
 							}
 							
-							m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_GO_DECODE, 30);
+							m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_GO_DECODE, 10);
 						}
 						break;
 						

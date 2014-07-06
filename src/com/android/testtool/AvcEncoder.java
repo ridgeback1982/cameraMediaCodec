@@ -232,6 +232,12 @@ public class AvcEncoder
 	{
 		//Log.i("AvcEncoder", "InputRawBuffer ++");
 		
+		if (mStatus != STATUS_EXEC)
+		{
+			//Log.d("AvcEncoder", "wrong status:"+mStatus);
+			return R_TRY_AGAIN_LATER;
+		}
+		
 		if (true == mFpsHelper.ShouldBeDropped(timestamp))
 		{
 			return R_BUFFER_OK;
@@ -281,6 +287,12 @@ public class AvcEncoder
 	public int OutputAvcBuffer(/*out*/byte[] bytes, /*in, out*/int[] len, /*out*/long[] timestamp)
 	{
 		//Log.i("AvcEncoder", "OutputAvcBuffer ++");
+		if (mStatus != STATUS_EXEC)
+		{
+			//Log.d("AvcEncoder", "wrong status:"+mStatus);
+			return R_TRY_AGAIN_LATER;
+		}
+		
 		if (mOutputBytesInStore != null)
 		{
 			if (mOutputBytesInStore.length > len[0])

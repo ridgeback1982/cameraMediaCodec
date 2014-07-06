@@ -110,9 +110,29 @@ public class AvcDecoder
 		}
 	}
 	
-	public int InputAvcBuffer(/*in*/byte[] bytes, /*in*/int len, long timestamp)
+	public void flush()
+	{
+		Log.i("AvcDecoder", "flush");
+		if (mStatus != STATUS_EXEC)
+		{
+			Log.d("AvcDecoder", "wrong status:"+mStatus);
+			return;
+		}
+		
+		if (mMC != null)
+		{
+			mMC.flush();
+		}
+	}
+	
+	public int InputAvcBuffer(/*in*/byte[] bytes, /*in*/int len, /*in*/long timestamp, /*in*/int flag)
 	{
 		//Log.i("AvcDecoder", "InputAvcBuffer ++");
+		if (mStatus != STATUS_EXEC)
+		{
+			//Log.d("AvcDecoder", "wrong status:"+mStatus);
+			return R_TRY_AGAIN_LATER;
+		}
 		
 		int inputbufferindex = mMC.dequeueInputBuffer(BUFFER_TIMEOUT);
 		if (inputbufferindex >= 0)
@@ -123,20 +143,14 @@ public class AvcDecoder
 			
 			if (capacity < len)
 			{
-				mMC.queueInputBuffer(inputbufferindex, 0, 0, timestamp, 0); 	//return the buffer to OMX quickly
+				mMC.queueInputBuffer(inputbufferindex, 0, 0, timestamp, flag); 	//return the buffer to OMX quickly
 				Log.e("AvcDecoder", "InputAvcBuffer, input size invalidate, capacity="+capacity+",len="+len);
 				return R_INVALIDATE_BUFFER_SIZE;
 			}
 			
 			inputBuffer.put(bytes, 0, len);
 			
-			/*test only*/
-//			if (len == 25)
-//			{
-//				mMC.queueInputBuffer(inputbufferindex, 0, len, timestamp, MediaCodec.BUFFER_FLAG_CODEC_CONFIG);
-//			}
-//			else 
-				mMC.queueInputBuffer(inputbufferindex, 0, len, timestamp, 0);
+			mMC.queueInputBuffer(inputbufferindex, 0, len, timestamp, flag);
 			
 			//Log.i("AvcDecoder", "InputAvcBuffer -- OK, capacity="+capacity);
 		}
@@ -165,6 +179,12 @@ public class AvcDecoder
 	public int OutputRawBuffer(/*out*/byte[] bytes, /*in, out*/int[] len, /*out*/long[] timestamp)
 	{
 		//Log.i("AvcDecoder", "OutputRawBuffer ++");
+		if (mStatus != STATUS_EXEC)
+		{
+			//Log.d("AvcDecoder", "wrong status:"+mStatus);
+			return R_TRY_AGAIN_LATER;
+		}
+		
 		int outputbufferindex = mMC.dequeueOutputBuffer(mBI, BUFFER_TIMEOUT);
 		if (outputbufferindex >= 0)
 		{
