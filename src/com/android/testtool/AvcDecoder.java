@@ -34,6 +34,9 @@ public class AvcDecoder
 	private BufferInfo mBI = null;
 	private int mStatus = STATUS_INVALID;
 	private final int BUFFER_TIMEOUT = 0; //microseconds
+	//for render flash on Galaxy S4
+    private final int RENDER_DELAY_VALUE = 1;	
+	private int mDecodeRenderDelayCount = 0;
 	
 	
 	public int Init()
@@ -86,6 +89,7 @@ public class AvcDecoder
 		
 		if (mMC != null)
 		{
+			mDecodeRenderDelayCount = RENDER_DELAY_VALUE;
 			mMC.start();
 			mInputBuffers = mMC.getInputBuffers();
 			mOutputBuffers = mMC.getOutputBuffers();
@@ -197,8 +201,21 @@ public class AvcDecoder
 					mOutputBuffers[outputbufferindex].get(bytes, 0, mBI.size);
 				len[0] = mBI.size;
 				timestamp[0] = mBI.presentationTimeUs;
+				
+				if (mDecodeRenderDelayCount == 0)
+				{
+					mMC.releaseOutputBuffer(outputbufferindex, true);
+				}
+				else
+				{
+					mDecodeRenderDelayCount --;
+					mMC.releaseOutputBuffer(outputbufferindex, false);
+				}
 			}
-			mMC.releaseOutputBuffer(outputbufferindex, true);
+			else
+			{
+				mMC.releaseOutputBuffer(outputbufferindex, false);
+			}
 			
 			//Log.i("AvcDecoder", "OutputRawBuffer -- OK at "+ outputbufferindex+", size="+len[0]);
 		}
