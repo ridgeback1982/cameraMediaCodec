@@ -192,30 +192,41 @@ public class AvcDecoder
 		int outputbufferindex = mMC.dequeueOutputBuffer(mBI, BUFFER_TIMEOUT);
 		if (outputbufferindex >= 0)
 		{
-			if (mOutputBuffers[outputbufferindex] != null)
+			timestamp[0] = mBI.presentationTimeUs;
+			if (mDecodeRenderDelayCount == 0)
 			{
-				mOutputBuffers[outputbufferindex].position(mBI.offset);
-				mOutputBuffers[outputbufferindex].limit(mBI.offset + mBI.size);
-				
-				if (bytes != null)
-					mOutputBuffers[outputbufferindex].get(bytes, 0, mBI.size);
-				len[0] = mBI.size;
-				timestamp[0] = mBI.presentationTimeUs;
-				
-				if (mDecodeRenderDelayCount == 0)
-				{
-					mMC.releaseOutputBuffer(outputbufferindex, true);
-				}
-				else
-				{
-					mDecodeRenderDelayCount --;
-					mMC.releaseOutputBuffer(outputbufferindex, false);
-				}
+				mMC.releaseOutputBuffer(outputbufferindex, true);
 			}
 			else
 			{
+				mDecodeRenderDelayCount --;
 				mMC.releaseOutputBuffer(outputbufferindex, false);
 			}
+			
+//			if (mOutputBuffers[outputbufferindex] != null)
+//			{
+//				mOutputBuffers[outputbufferindex].position(mBI.offset);
+//				mOutputBuffers[outputbufferindex].limit(mBI.offset + mBI.size);
+//				
+//				if (bytes != null)
+//					mOutputBuffers[outputbufferindex].get(bytes, 0, mBI.size);
+//				len[0] = mBI.size;
+//				timestamp[0] = mBI.presentationTimeUs;
+//				
+//				if (mDecodeRenderDelayCount == 0)
+//				{
+//					mMC.releaseOutputBuffer(outputbufferindex, true);
+//				}
+//				else
+//				{
+//					mDecodeRenderDelayCount --;
+//					mMC.releaseOutputBuffer(outputbufferindex, false);
+//				}
+//			}
+//			else
+//			{
+//				mMC.releaseOutputBuffer(outputbufferindex, false);
+//			}
 			
 			//Log.i("AvcDecoder", "OutputRawBuffer -- OK at "+ outputbufferindex+", size="+len[0]);
 		}

@@ -34,6 +34,7 @@ public class AvcEncoder
 	public static final int DEFAULT_AVC_BUF_SIZE = 1024*1024;	//1M bytes
 	
 	private MediaCodec mMC = null;
+	//private String MIME_TYPE = "video/x-vnd.on2.vp8";
 	private String MIME_TYPE = "video/avc";
 	private AvcEncoderSink mSink = null;
 	private MediaFormat mMF = null;
@@ -47,6 +48,11 @@ public class AvcEncoder
 	private int mStatus = STATUS_INVALID;
 	
 	private FpsHelper mFpsHelper = null;
+	
+	//device related:
+	//1. Galaxy S4, it is OK to set to -1, means no following IDR except the first one
+	//2. Nexus 5, if set to -1, every frame is IDR, no P frames!!!
+	private static final int IDR_INTERVEL_SECONDS = 60;		//60 seconds to generate an IDR
 	
 	private static MediaCodecInfo selectCodec(String mimeType) {
 	     int numCodecs = MediaCodecList.getCodecCount();
@@ -79,9 +85,10 @@ public class AvcEncoder
 	    for (int i = 0; i < capabilities.colorFormats.length && mPrimeColorFormat == 0; i++) {
 	        int format = capabilities.colorFormats[i];
 	        switch (format) {
+	        //primary color formats
 	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:				/*I420 --- YUV4:2:0 --- Nvidia Tegra 3, Samsung Exynos */
-	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedPlanar:		/*yv12 --- YVU4:2:0 --- Qualcomm Adreno */
-	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:			/*NV12*/
+	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedPlanar:		/*yv12 --- YVU4:2:0 --- ?*/
+	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:			/*NV12 --- Qualcomm Adreno330/320*/
 	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedSemiPlanar:	/*NV21 --- TI OMAP */
 	        case MediaCodecInfo.CodecCapabilities.COLOR_TI_FormatYUV420PackedSemiPlanar:
 	        case MediaCodecInfo.CodecCapabilities.COLOR_QCOM_FormatYUV420SemiPlanar:
@@ -128,7 +135,7 @@ public class AvcEncoder
 		{
 			mMF.setInteger(MediaFormat.KEY_COLOR_FORMAT, mPrimeColorFormat);  
 		}
-		mMF.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, -1); //关键帧间隔时间 单位s
+		mMF.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IDR_INTERVEL_SECONDS); //关键帧间隔时间 单位s
 		mMF.setInteger("stride", width);
 		mMF.setInteger("slice-height", height);
 		
@@ -228,7 +235,7 @@ public class AvcEncoder
 			mMC.setParameters(b);
 	}
 	
-	public int InputRawBuffer(/*in*/byte[] bytes, /*in*/int len, /*in*/long timestamp)
+	public int InputRawBuffer(/*in*/byte[] bytes, /*in*/int len, /*in*/long timestamp, /*flag*/int flag)
 	{
 		//Log.i("AvcEncoder", "InputRawBuffer ++");
 		
@@ -252,13 +259,13 @@ public class AvcEncoder
 			
 			if (capacity < len)
 			{
-				mMC.queueInputBuffer(inputbufferindex, 0, 0, timestamp, 0); 	//return the buffer to OMX quickly
+				mMC.queueInputBuffer(inputbufferindex, 0, 0, timestamp, flag); 	//return the buffer to OMX quickly
 				Log.e("AvcEncoder", "InputRawBuffer, input size invalidate, capacity="+capacity+",len="+len);
 				return R_INVALIDATE_BUFFER_SIZE;
 			}
 			
 			inputBuffer.put(bytes, 0, len);
-			mMC.queueInputBuffer(inputbufferindex, 0, len, timestamp, 0);
+			mMC.queueInputBuffer(inputbufferindex, 0, len, timestamp, flag);
 			
 			//Log.i("AvcEncoder", "InputRawBuffer -- OK, capacity="+capacity);
 		}

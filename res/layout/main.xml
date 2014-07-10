@@ -104,12 +104,17 @@
             android:id="@+id/checkBoxEnableVideoEncode"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="video_encode" />
+            android:text="enc" />
     <CheckBox
             android:id="@+id/checkBoxAvcGotoFile"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="AvcGotoFile" />
+            android:text="DumpAvc" />
+    <CheckBox
+            android:id="@+id/checkBoxRawFromFile"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RawInput" />
     
     <EditText
         android:id="@+id/FPSedit"
@@ -131,7 +136,7 @@
             android:id="@+id/checkBoxVideoDecode"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Decode" />
+            android:text="Dec" />
     
     </LinearLayout>
 

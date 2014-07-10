@@ -9,6 +9,7 @@ public class AvcUtils {
 	public static final int START_PREFIX_CODE = 0x00000001;
 	public static final int START_PREFIX_LENGTH = 4;
 	public static final int NAL_UNIT_HEADER_LENGTH = 1;
+	public static final int NAL_TYPE_UNSPECIFY				= 0x00;
 	public static final int NAL_TYPE_CODED_SLICE 			= 0x01;
 	public static final int NAL_TYPE_CODED_SLICE_IDR 		= 0x05;
 	public static final int NAL_TYPE_SEI 					= 0x06;
