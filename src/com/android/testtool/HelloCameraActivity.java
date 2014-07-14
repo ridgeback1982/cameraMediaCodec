@@ -85,6 +85,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	private CheckBox mCBVideoEncode;
 	private CheckBox mCBRawInput;
 	private CheckBox mCBAvcGotoFile;
+	private CheckBox mCBMultiEncoder;
 	private CheckBox mCBVideoDecode;
 	private EditText mETFps;
 	private EditText mETBps;	//kbps
@@ -129,7 +130,8 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	
 	long mPreviewGap_starttick = 0;
 	
-	AvcEncoder mAvcEnc = null;
+	//AvcEncoder mAvcEnc = null;
+	SvcEncoder mSvcEnc = null;
 	AvcDecoder mAvcDec = null;
 	AvcDecoderBug mAvcDecBug = null;
 	boolean mEnableVideoEncode;
@@ -144,6 +146,12 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     private int mEncBytesPerSecond = 0;
     long mAvcEncodeFirstOutputGap_starttick = 0;
     boolean mAvcGotoFile;
+    boolean mMultiEncoder;
+    final int MAX_SPACIAL_LAYER = 4;
+    int[] mSvcEncodeWidth;
+    int[] mSvcEncodeHeight;
+    int[] mSvcEncodeFPS;
+    int[] mSvcEncodeBPS;
     int	mPeriodKeyFrame = -1;	//ms
     private FileOutputStream mFOS = null;
     byte[] mRawData = null;
@@ -364,7 +372,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
         						mEventHandler.sendEmptyMessage(EVENT_CALC_ENCODE_FPS);
         					}
         					
-        					if (mAvcEnc != null) {
+        					if (mSvcEnc != null) {
 	        					synchronized(mAvcEncLock) {
 	        		    			mRawHeight = RAW_PIC_HEIGHT;
 	        						mRawWidth = RAW_PIC_WIDTH;
@@ -372,12 +380,33 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	        						mFrameCountIntoEncoder = 0;
 	        					    mFrameCountOutofEncoder = 0;
 	        						
-	        						mAvcEnc.stop();
-	        						mAvcEnc.tryConfig(mRawWidth, mRawHeight, mEncode_fps, mEncode_bps);
-	        						mAvcEnc.start();
+	        					    mSvcEnc.Stop();
+	        					    int capa = mSvcEnc.GetSpacialLayerCapacity();
+	        					    SvcEncodeSpacialParam[] params = new SvcEncodeSpacialParam[capa];
+	        					    if (mMultiEncoder == false)
+	        					    {
+		        					    params[0] = new SvcEncodeSpacialParam();
+		        					    params[0].mWidth = mRawWidth;
+		        					    params[0].mHeight = mRawHeight;
+		        					    params[0].mFrameRate = mEncode_fps;
+		        					    params[0].mBitrate = mEncode_bps;
+	        					    }
+	        					    else
+	        					    {
+	        					    	for (int i=0;i<capa;i++)
+	        					    	{
+	        					    		params[i] = new SvcEncodeSpacialParam();
+	        					    		params[i].mWidth = mSvcEncodeWidth[i];
+			        					    params[i].mHeight = mSvcEncodeHeight[i];
+			        					    params[i].mFrameRate = mSvcEncodeFPS[i];
+			        					    params[i].mBitrate = mSvcEncodeBPS[i];
+	        					    	}
+	        					    }
+	        					    mSvcEnc.Configure(params);
+	        						mSvcEnc.Start();
 	        						
-	        						if (Build.VERSION.SDK_INT >= 19)
-	        							mAvcEnc.SetBitrateOnFly(mEncode_bps);
+	        						//if (Build.VERSION.SDK_INT >= 19)
+	        						//	mAvcEnc.SetBitrateOnFly(mEncode_bps);
 	        					}
         					}
         					
@@ -574,6 +603,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	mPeriodKeyFrame = -1;		//test for request key frame, ms period
     	mAvcGotoFile = false;		//really for debug, write files
     	mEnableRawInput = false;
+    	mMultiEncoder = false;
     	mRawHeight = 0;
     	mRawWidth = 0;
     	mEncode_fps = 30;
@@ -583,6 +613,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	mDecodeBuffers_clean = new LinkedList<PreviewBufferInfo>();
     	mDecodeBuffers_dirty = new LinkedList<PreviewBufferInfo>();
     	mAvcDecBug = new AvcDecoderBug();
+    	mSvcEncodeWidth = new int[] {160, 320, 640, 1280};
+        mSvcEncodeHeight = new int[] {90, 180, 360, 720};
+        mSvcEncodeFPS = new int[] {6, 12, 24, 30};
+        mSvcEncodeBPS = new int[] {64000, 180000, 520000, 1700000};
     	
     	
     	mCBVideoEncode = (CheckBox)findViewById(R.id.checkBoxEnableVideoEncode);
@@ -597,6 +631,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 		mCBAvcGotoFile = (CheckBox)findViewById(R.id.checkBoxAvcGotoFile);
 		mCBAvcGotoFile.setChecked(mAvcGotoFile);
 		mCBAvcGotoFile.setOnCheckedChangeListener(this);
+		
+		mCBMultiEncoder = (CheckBox)findViewById(R.id.checkBoxMultiEnc);
+		mCBMultiEncoder.setChecked(mMultiEncoder);
+		mCBMultiEncoder.setOnCheckedChangeListener(this);
 		
 		mCBVideoDecode = (CheckBox)findViewById(R.id.checkBoxVideoDecode);
 		mCBVideoDecode.setChecked(mEnableVideoDecode);
@@ -1393,70 +1431,90 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 			if (mRawHeight != siz.height || mRawWidth != siz.width)
 			{
 				Log.d(log_tag, "onPreviewFrame, pic size changed to "+siz.width+"x"+siz.height);
-				
-				if (mAvcEnc != null)
+				if (mAvcGotoFile == true)
 				{
-					if (mAvcGotoFile == true)
-					{
-						try {
-							if (mFOS != null)
-							{
-								mFOS.close();
-								mFOS = null;
-							}
-						} catch (IOException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-						
-	                    try {
-	                    	File dir = Environment.getExternalStorageDirectory();
-	                    	String fname = "mc_"+Integer.toString(siz.width)+"x"+Integer.toString(siz.height)+".h264";
-		                    File filePath = new File(dir, fname);
-		                    if (filePath.exists() == true && filePath.isFile() == true)
-		                    	filePath.delete();
-							mFOS = new FileOutputStream(filePath);
-						} catch (Exception e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-					}
-					
-					//mAvcEncOutputSuspend = true;
-					mEncCountPerSecond = 0;
-					mEncBytesPerSecond = 0;
-					mEventHandler.removeMessages(EVENT_CALC_ENCODE_FPS);
-					mEventHandler.sendEmptyMessage(EVENT_CALC_ENCODE_FPS);
-					
-					synchronized(mAvcEncLock) {
-		    			mRawHeight = siz.height;
-						mRawWidth = siz.width;
-						mFrameCountIntoEncoder = 0;
-					    mFrameCountOutofEncoder = 0;
-						
-						mAvcEnc.stop();
-						mAvcEnc.tryConfig(mRawWidth, mRawHeight, mEncode_fps, mEncode_bps);
-						mAvcEnc.start();
-						
-						if (Build.VERSION.SDK_INT >= 19)
-							mAvcEnc.SetBitrateOnFly(mEncode_bps);
-					}
-					
-					if (m_CodecMsgHandler != null)
-					{
-						m_CodecMsgHandler.removeMessages(EVENT_GET_ENCODE_OUTPUT);
-						m_CodecMsgHandler.sendEmptyMessage(EVENT_GET_ENCODE_OUTPUT);
-						
-						if (mPeriodKeyFrame > 0)
+					try {
+						if (mFOS != null)
 						{
-							m_CodecMsgHandler.removeMessages(EVENT_REQUEST_KEY_FRAME);
-							m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_REQUEST_KEY_FRAME, 30);
+							mFOS.close();
+							mFOS = null;
 						}
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
 					}
 					
-					mAvcEncodeFirstOutputGap_starttick = System.currentTimeMillis();
-					//mAvcEncOutputSuspend = false;
+                    try {
+                    	File dir = Environment.getExternalStorageDirectory();
+                    	String fname = "mc_"+Integer.toString(siz.width)+"x"+Integer.toString(siz.height)+".h264";
+	                    File filePath = new File(dir, fname);
+	                    if (filePath.exists() == true && filePath.isFile() == true)
+	                    	filePath.delete();
+						mFOS = new FileOutputStream(filePath);
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
 				}
+				
+				//mAvcEncOutputSuspend = true;
+				mEncCountPerSecond = 0;
+				mEncBytesPerSecond = 0;
+				mEventHandler.removeMessages(EVENT_CALC_ENCODE_FPS);
+				mEventHandler.sendEmptyMessage(EVENT_CALC_ENCODE_FPS);
+				
+				synchronized(mAvcEncLock) {
+	    			mRawHeight = siz.height;
+					mRawWidth = siz.width;
+					mFrameCountIntoEncoder = 0;
+				    mFrameCountOutofEncoder = 0;
+					
+				    if (mSvcEnc != null)
+				    {
+				    	mSvcEnc.Stop();
+					    int capa = mSvcEnc.GetSpacialLayerCapacity();
+					    SvcEncodeSpacialParam[] params = new SvcEncodeSpacialParam[capa];
+					    if (mMultiEncoder == false)
+					    {
+    					    params[0] = new SvcEncodeSpacialParam();
+    					    params[0].mWidth = mRawWidth;
+    					    params[0].mHeight = mRawHeight;
+    					    params[0].mFrameRate = mEncode_fps;
+    					    params[0].mBitrate = mEncode_bps;
+					    }
+					    else
+					    {
+					    	for(int i=0;i<capa;i++)
+					    	{
+					    		params[i] = new SvcEncodeSpacialParam();
+					    		params[i].mWidth = mSvcEncodeWidth[i];
+        					    params[i].mHeight = mSvcEncodeHeight[i];
+        					    params[i].mFrameRate = mSvcEncodeFPS[i];
+        					    params[i].mBitrate = mSvcEncodeBPS[i];
+					    	}
+					    }
+					    mSvcEnc.Configure(params);
+						mSvcEnc.Start();
+					
+						//if (Build.VERSION.SDK_INT >= 19)
+						//	mAvcEnc.SetBitrateOnFly(mEncode_bps);
+				    }
+				}
+				
+				if (m_CodecMsgHandler != null)
+				{
+					m_CodecMsgHandler.removeMessages(EVENT_GET_ENCODE_OUTPUT);
+					m_CodecMsgHandler.sendEmptyMessage(EVENT_GET_ENCODE_OUTPUT);
+					
+					if (mPeriodKeyFrame > 0)
+					{
+						m_CodecMsgHandler.removeMessages(EVENT_REQUEST_KEY_FRAME);
+						m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_REQUEST_KEY_FRAME, 30);
+					}
+				}
+				
+				mAvcEncodeFirstOutputGap_starttick = System.currentTimeMillis();
+				
 			}
 		}
 		
@@ -1559,8 +1617,8 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 			{
 				if (arg1 == true)
 				{
-					mAvcEnc = new AvcEncoder();
-					mAvcEnc.Init(this);
+					mSvcEnc = new SvcEncoder();
+					mSvcEnc.Init();
 					
 					mAvcBuf = new byte[AvcEncoder.DEFAULT_AVC_BUF_SIZE];
 					
@@ -1648,6 +1706,15 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 			}
 			break;
 			
+		case R.id.checkBoxMultiEnc:
+			{
+				if (arg1 != mMultiEncoder)
+				{
+					mMultiEncoder = arg1;
+				}
+			}
+			break;
+			
 		case R.id.checkBoxVideoDecode:
 			if (arg1 != mEnableVideoDecode)
 			{
@@ -1714,11 +1781,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	    mFrameCountOutofEncoder = 0;
 		
 		synchronized(mAvcEncLock) {
-			if (mAvcEnc != null)
+			if (mSvcEnc != null)
 			{
-				mAvcEnc.stop();
-				mAvcEnc.Uninit();
-				mAvcEnc = null;
+				mSvcEnc.Stop();
+				mSvcEnc.Uninit();
+				mSvcEnc = null;
 			}
 		}
 		
@@ -1750,11 +1817,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					switch (msg.what) {
 						case EVENT_GET_ENCODE_OUTPUT:
 						{
-							if (mAvcEnc != null)
-							{
-								int res = AvcEncoder.R_BUFFER_OK;
-								synchronized(mAvcEncLock) {
-									//STEP 1: handle input buffer
+							//STEP 1: handle input buffer
+							int res = AvcEncoder.R_BUFFER_OK;
+							synchronized(mAvcEncLock) {
+								if (mSvcEnc != null)
+								{
 									if (mPreviewBuffers_dirty != null && mPreviewBuffers_clean != null)
 									{
 										Iterator<PreviewBufferInfo> ite = mPreviewBuffers_dirty.iterator();
@@ -1766,7 +1833,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 											if (mSelectColorFormat == ImageFormat.YV12)
 											{
 												int[] cs = new int[1];
-												mAvcEnc.queryInt(AvcEncoder.KEY_COLORFORMAT, cs);
+												mSvcEnc.queryInt(AvcEncoder.KEY_COLORFORMAT, cs);
 												if (cs[0] == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar)
 												{
 													if (mRawData == null || 
@@ -1798,7 +1865,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 													flag = MediaCodec.BUFFER_FLAG_END_OF_STREAM;
 												}
 											}
-											res = mAvcEnc.InputRawBuffer(mRawData, data_size, info.timestamp, flag);
+											res = mSvcEnc.InputRawBuffer(mRawData, data_size, info.timestamp, flag);
 											if (res != AvcEncoder.R_BUFFER_OK)
 											{
 												Log.w(log_tag, "mAvcEnc.InputRawBuffer, maybe wrong:"+res);
@@ -1819,124 +1886,156 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 											}
 										}	//while
 									}	//if (mPreviewBuffers_dirty != null && mPreviewBuffers_clean != null)
-								}	//synchronized(mAvcEncLock)
 									
-								//STEP 2: handle output buffer
-								res = AvcEncoder.R_BUFFER_OK;
-								while(res == AvcEncoder.R_BUFFER_OK)
+								}	//if (mSvcEnc != null)
+							}	//synchronized(mAvcEncLock)
+								
+							
+									
+							//STEP 2: handle output buffer
+							res = AvcEncoder.R_BUFFER_OK;
+							while(res == AvcEncoder.R_BUFFER_OK)
+							{
+								int[] len = new int[1];
+								len[0] = mAvcBuf.length;
+								SvcEncodeOutputParam svc_output = new SvcEncodeOutputParam();
+								//long[] ts = new long[1];
+								//int[] flags = new int[1];
+								synchronized(mAvcEncLock) {
+									
+									if (mSvcEnc != null)
+									{
+										res = mSvcEnc.OutputAvcBuffer(mAvcBuf, len, svc_output);
+//										if (res == AvcEncoder.R_INVALIDATE_BUFFER_SIZE)
+//										{
+//											//mAvcBuf should be refreshed
+//											len[0] = mAvcBuf.length;
+//											res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len, ts, flags);
+//										}
+									}
+									else
+									{
+										res = AvcEncoder.R_TRY_AGAIN_LATER;
+									}
+								}
+								
+								if (res == AvcEncoder.R_BUFFER_OK)
 								{
-									int[] len = new int[1];
-									len[0] = mAvcBuf.length;
-									long[] ts = new long[1];
-									synchronized(mAvcEncLock) {
-										res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len, ts);
-										if (res == AvcEncoder.R_INVALIDATE_BUFFER_SIZE)
+									mFrameCountOutofEncoder ++;
+									//Log.d(log_tag, "mFrameCountOutofEncoder = "+mFrameCountOutofEncoder);
+									//TODO:
+									//write avc to file, or calc the fps
+									if(mAvcGotoFile == true)
+									{
+										if(mFOS != null)
 										{
-											//mAvcBuf should be refreshed
-											len[0] = mAvcBuf.length;
-											res = mAvcEnc.OutputAvcBuffer(mAvcBuf, len, ts);
+											try {
+												mFOS.write(mAvcBuf, 0, len[0]);
+											} catch (IOException e) {
+												// TODO Auto-generated catch block
+												e.printStackTrace();
+											}
 										}
 									}
 									
-									if (res == AvcEncoder.R_BUFFER_OK)
+									mEncBytesPerSecond += len[0];
+									mEncCountPerSecond++;
+									
+									if (mAvcEncodeFirstOutputGap_starttick != 0)
 									{
-										mFrameCountOutofEncoder ++;
-										//Log.d(log_tag, "mFrameCountOutofEncoder = "+mFrameCountOutofEncoder);
-										//TODO:
-										//write avc to file, or calc the fps
-										if(mAvcGotoFile == true)
-										{
-											if(mFOS != null)
+										long tick = System.currentTimeMillis();
+										Log.i("AvcEncoder", "first Avc encoder output gap is "+(tick - mAvcEncodeFirstOutputGap_starttick));
+										mAvcEncodeFirstOutputGap_starttick = 0;
+									}
+									
+									//debug for delay
+									mDelay_lastEncodeTick = svc_output.timestamp;
+									
+									if (mEnableVideoDecode == true &&
+											(mDecodeBuffers_clean != null && mDecodeBuffers_dirty != null)
+										)
+									{
+										synchronized(mAvcDecLock) {
+											Iterator<PreviewBufferInfo> ite = mDecodeBuffers_clean.iterator();
+											if (ite.hasNext())
 											{
-												try {
-													mFOS.write(mAvcBuf, 0, len[0]);
-												} catch (IOException e) {
-													// TODO Auto-generated catch block
-													e.printStackTrace();
-												}
-											}
-										}
-										
-										mEncBytesPerSecond += len[0];
-										mEncCountPerSecond++;
-										
-										if (mAvcEncodeFirstOutputGap_starttick != 0)
-										{
-											long tick = System.currentTimeMillis();
-											Log.i("AvcEncoder", "first Avc encoder output gap is "+(tick - mAvcEncodeFirstOutputGap_starttick));
-											mAvcEncodeFirstOutputGap_starttick = 0;
-										}
-										
-										//debug for delay
-										mDelay_lastEncodeTick = ts[0];
-										
-										if (mEnableVideoDecode == true &&
-												(mDecodeBuffers_clean != null && mDecodeBuffers_dirty != null)
-											)
-										{
-											synchronized(mAvcDecLock) {
-												Iterator<PreviewBufferInfo> ite = mDecodeBuffers_clean.iterator();
-												if (ite.hasNext())
+												PreviewBufferInfo info = ite.next();
+												if (info.buffer.length >= len[0])
 												{
-													PreviewBufferInfo info = ite.next();
-													if (info.buffer.length >= len[0])
-													{
-														info.timestamp = ts[0];
-														info.size = len[0];
-														System.arraycopy(mAvcBuf, 0, info.buffer, 0, len[0]);
-														ite.remove();
-														mDecodeBuffers_dirty.add(info);
-													}
-													else {
-														Log.e(log_tag, "decoder uni buffer too small, need "+len[0]+" but has "+info.buffer.length);
-													}
+													info.timestamp = svc_output.timestamp;
+													info.size = len[0];
+													System.arraycopy(mAvcBuf, 0, info.buffer, 0, len[0]);
+													ite.remove();
+													mDecodeBuffers_dirty.add(info);
+												}
+												else {
+													Log.e(log_tag, "decoder uni buffer too small, need "+len[0]+" but has "+info.buffer.length);
 												}
 											}
 										}
-										
-										//Log.i(log_tag, "get encoded data, len="+len[0]);
 									}
-									else if (res == AvcEncoder.R_OUTPUT_UPDATE)
-									{
-										res = AvcEncoder.R_BUFFER_OK;
-									}
-									else if (res == AvcEncoder.R_TRY_AGAIN_LATER)
-									{
+									
+									//Log.i(log_tag, "get encoded data, len="+len[0]);
+								}
+								else if (res == AvcEncoder.R_OUTPUT_UPDATE)
+								{
+									res = AvcEncoder.R_BUFFER_OK;
+								}
+								else if (res == AvcEncoder.R_TRY_AGAIN_LATER)
+								{
 //											try {
 //												Thread.sleep(1);
 //											} catch (InterruptedException e) {
 //												// TODO Auto-generated catch block
 //												e.printStackTrace();
 //											}
-									}
-									else
-									{
-										//not possible from Android doc
-									}
 								}
-									
-							}	//if (mAvcEnc != null)
-							
-							
+								else
+								{
+									//not possible from Android doc
+								}
+							}
+
 							m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_GET_ENCODE_OUTPUT, 10);
 						}
 						break;
 
 						case EVENT_REQUEST_KEY_FRAME:
 						{
-							if (mAvcEnc != null)
+							if (mSvcEnc != null)
 							{
 								if (Build.VERSION.SDK_INT < 19)
 								{
 									synchronized(mAvcEncLock) {
 										Log.d(log_tag, "CodecThread, EVENT_REQUEST_KEY_FRAME under api level 19");
-										mAvcEnc.stop();
-										mAvcEnc.tryConfig(mRawWidth, mRawHeight, mEncode_fps, mEncode_bps);
-										mAvcEnc.start();
+										mSvcEnc.Stop();
+		        					    int capa = mSvcEnc.GetSpacialLayerCapacity();
+		        					    SvcEncodeSpacialParam[] params = new SvcEncodeSpacialParam[capa];
+		        					    if (mMultiEncoder == false)
+		        					    {
+			        					    params[0] = new SvcEncodeSpacialParam();
+			        					    params[0].mWidth = mRawWidth;
+			        					    params[0].mHeight = mRawHeight;
+			        					    params[0].mFrameRate = mEncode_fps;
+			        					    params[0].mBitrate = mEncode_bps;
+		        					    }
+		        					    else
+		        					    {
+		        					    	for(int i=0;i<capa;i++)
+		        					    	{
+		        					    		params[i] = new SvcEncodeSpacialParam();
+		        					    		params[i].mWidth = mSvcEncodeWidth[i];
+				        					    params[i].mHeight = mSvcEncodeHeight[i];
+				        					    params[i].mFrameRate = mSvcEncodeFPS[i];
+				        					    params[i].mBitrate = mSvcEncodeBPS[i];
+		        					    	}
+		        					    }
+		        					    mSvcEnc.Configure(params);
+		        						mSvcEnc.Start();
 									}
 								}
 								else {
-									mAvcEnc.RequestKeyFrameSoon();
+									mSvcEnc.RequestKeyFrameSoon();
 								}
 							}
 							

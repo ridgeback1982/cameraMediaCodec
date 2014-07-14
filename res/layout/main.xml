@@ -116,6 +116,12 @@
             android:layout_height="wrap_content"
             android:text="RawInput" />
     
+    <CheckBox
+            android:id="@+id/checkBoxMultiEnc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MultiEnc" />
+    
     <EditText
         android:id="@+id/FPSedit"
         android:layout_width="wrap_content"

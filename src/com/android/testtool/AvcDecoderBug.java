@@ -14,10 +14,10 @@ public class AvcDecoderBug {
 //			}
 			
 			//drop idr
-			if (nal_type == AvcUtils.NAL_TYPE_CODED_SLICE_IDR)
-			{
-				drop = true;
-			}
+//			if (nal_type == AvcUtils.NAL_TYPE_CODED_SLICE_IDR)
+//			{
+//				drop = true;
+//			}
 			
 			//drop p
 //			if (nal_type == AvcUtils.NAL_TYPE_CODED_SLICE)

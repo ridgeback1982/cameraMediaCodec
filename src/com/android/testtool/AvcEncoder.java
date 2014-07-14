@@ -30,6 +30,8 @@ public class AvcEncoder
 	public static final int STATUS_WAIT = 5;	//waiting for resouces
 	
 	public static final String KEY_COLORFORMAT = "key_colorformat";
+	public static final String KEY_WIDTH = "key_width";
+	public static final String KEY_HEIGHT = "key_height";
 	
 	public static final int DEFAULT_AVC_BUF_SIZE = 1024*1024;	//1M bytes
 	
@@ -45,6 +47,8 @@ public class AvcEncoder
 	private byte[] mOutputBytesInStore = null;
 	private long mOutputBytesInStore_timestamp = 0;
 	private int mPrimeColorFormat = 0; //0 is not listed in Android doc, as MediaCodecInfo.CodecCapabilities
+	private int mWidth = 0;
+	private int mHeight = 0;
 	private int mStatus = STATUS_INVALID;
 	
 	private FpsHelper mFpsHelper = null;
@@ -54,54 +58,11 @@ public class AvcEncoder
 	//2. Nexus 5, if set to -1, every frame is IDR, no P frames!!!
 	private static final int IDR_INTERVEL_SECONDS = 60;		//60 seconds to generate an IDR
 	
-	private static MediaCodecInfo selectCodec(String mimeType) {
-	     int numCodecs = MediaCodecList.getCodecCount();
-	     for (int i = 0; i < numCodecs; i++) {
-	         MediaCodecInfo codecInfo = MediaCodecList.getCodecInfoAt(i);
-
-	         if (!codecInfo.isEncoder()) {
-	             continue;
-	         }
-
-	         String[] types = codecInfo.getSupportedTypes();
-	         for (int j = 0; j < types.length; j++) {
-	             if (types[j].equalsIgnoreCase(mimeType)) {
-	            	 Log.d("AvcEncoder", "selectCodec OK, get "+mimeType);
-	                 return codecInfo;
-	             }
-	         }
-	     }
-	     return null;
-	 }
-	
-	public void Init(AvcEncoderSink sink)
+	public void Init(int colorformat, AvcEncoderSink sink/*null as default*/)
 	{
 		Log.i("AvcEncoder", "Init");
 		
-		MediaCodecInfo codecInfo = selectCodec(MIME_TYPE);
-		
-		// Find a color profile that the codec supports
-	    MediaCodecInfo.CodecCapabilities capabilities = codecInfo.getCapabilitiesForType(MIME_TYPE);	//may freeze on Nexus4 Android4.2.2
-	    for (int i = 0; i < capabilities.colorFormats.length && mPrimeColorFormat == 0; i++) {
-	        int format = capabilities.colorFormats[i];
-	        switch (format) {
-	        //primary color formats
-	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar:				/*I420 --- YUV4:2:0 --- Nvidia Tegra 3, Samsung Exynos */
-	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedPlanar:		/*yv12 --- YVU4:2:0 --- ?*/
-	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:			/*NV12 --- Qualcomm Adreno330/320*/
-	        case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedSemiPlanar:	/*NV21 --- TI OMAP */
-	        case MediaCodecInfo.CodecCapabilities.COLOR_TI_FormatYUV420PackedSemiPlanar:
-	        case MediaCodecInfo.CodecCapabilities.COLOR_QCOM_FormatYUV420SemiPlanar:
-	        	mPrimeColorFormat = format;
-	        	Log.d("AvcEncoder", "get supportted color format " + format);
-	            break;
-	        default:
-	            Log.d("AvcEncoder", "Skipping unsupported color format " + format);
-	            break;
-	        }
-	    }
-	    
-	    //mPrimeColorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedPlanar;
+	    mPrimeColorFormat = colorformat;
 		
 		mMC = MediaCodec.createEncoderByType(MIME_TYPE);
 		
@@ -126,7 +87,7 @@ public class AvcEncoder
 	
 	public int tryConfig(int width, int height, int framerate, int bitrate)
 	{
-		Log.i("AvcEncoder", "tryConfig ++");
+		Log.i("AvcEncoder", "tryConfig ++, w="+width+",h="+height);
 		mMF = MediaFormat.createVideoFormat(MIME_TYPE, width, height);
 		mMF.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);  
 		mMF.setInteger(MediaFormat.KEY_FRAME_RATE, framerate);  
@@ -138,6 +99,8 @@ public class AvcEncoder
 		mMF.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IDR_INTERVEL_SECONDS); //关键帧间隔时间 单位s
 		mMF.setInteger("stride", width);
 		mMF.setInteger("slice-height", height);
+		mWidth = width;
+		mHeight = height;
 		
 		try {
 			mMC.configure(mMF, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
@@ -162,16 +125,32 @@ public class AvcEncoder
 			value[0] = mPrimeColorFormat;
 			return true;
 		}
+		if (key.equals(KEY_WIDTH))
+		{
+			value[0] = mWidth;
+			return true;
+		}
+		if (key.equals(KEY_HEIGHT))
+		{
+			value[0] = mHeight;
+			return true;
+		}
 		
 		return false;
+	}
+	
+	public int status()
+	{
+		return mStatus;
 	}
 
 	public void start()
 	{
 		Log.i("AvcEncoder", "start");
-		if (mStatus == STATUS_EXEC)
+		
+		if (mStatus != STATUS_IDLE)
 		{
-			Log.d("AvcEncoder", "wrong status:"+mStatus);
+			Log.e("AvcEncoder", "wrong status:"+mStatus);
 			return;
 		}
 		
@@ -291,7 +270,8 @@ public class AvcEncoder
 	
 	//usage: int[] len = new int[1];
 	//long[] ts = new long[1];
-	public int OutputAvcBuffer(/*out*/byte[] bytes, /*in, out*/int[] len, /*out*/long[] timestamp)
+	//int[] flag = new int[1];
+	public int OutputAvcBuffer(/*in*/byte[] bytes, /*in, out*/int[] len, /*out*/long[] timestamp, /*out*/int[] flags)
 	{
 		//Log.i("AvcEncoder", "OutputAvcBuffer ++");
 		if (mStatus != STATUS_EXEC)
@@ -305,7 +285,8 @@ public class AvcEncoder
 			if (mOutputBytesInStore.length > len[0])
 			{
 				Log.w("AvcEncoder", "OutputAvcBuffer, len is still too small, requre at least "+ mOutputBytesInStore.length);
-				mSink.onUpdateOutputBufferSize(mOutputBytesInStore.length);
+				if (mSink != null)
+					mSink.onUpdateOutputBufferSize(mOutputBytesInStore.length);
 				return R_INVALIDATE_BUFFER_SIZE;
 			}
 			else
@@ -330,7 +311,8 @@ public class AvcEncoder
 			if (mBI.size > len[0])
 			{
 				Log.w("AvcEncoder", "OutputAvcBuffer, len is too small, requre at least "+ mBI.size);
-				mSink.onUpdateOutputBufferSize(mBI.size);
+				if (mSink != null)
+					mSink.onUpdateOutputBufferSize(mBI.size);
 				mOutputBytesInStore = new byte[mBI.size];
 				mOutputBytesInStore_timestamp = mBI.presentationTimeUs;
 				mOutputBuffers[outputbufferindex].get(mOutputBytesInStore);
@@ -340,6 +322,7 @@ public class AvcEncoder
 			mOutputBuffers[outputbufferindex].get(bytes, 0, mBI.size);
 			len[0] = mBI.size ;
 			timestamp[0] = mBI.presentationTimeUs;
+			flags[0] = mBI.flags;
 			mMC.releaseOutputBuffer(outputbufferindex, false);
 			
 			//Log.i("AvcEncoder", "OutputAvcBuffer -- OK at "+ outputbufferindex+", size="+len[0]);
