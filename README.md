@@ -18,3 +18,7 @@ There are two main features for a realtime application:
 1. requested key frame
 2. width/height/fps/bitrate config on the fly
 Both support nearly perfect
+
+
+New feature, but under testing:
+1. support SVC encoder
