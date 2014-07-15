@@ -75,8 +75,28 @@ class YuvUtils {
 				case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar:			/*NV12 --- */
 			    case MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedSemiPlanar:	/*NV21 --- */
 			    {
-			    	//not supported currently
-			    	dst_yuv = null;
+			    	//copy Y
+					int src_yoffset = 0;
+					int dst_yoffset = 0;
+					for (int i=0;i<dst_height;i++)
+					{
+						System.arraycopy(src_yuv, src_yoffset, dst_yuv, dst_yoffset, dst_width);
+						src_yoffset += src_width;
+						dst_yoffset += dst_width;
+					}
+					
+					//copy u and v
+					int src_uoffset = 0;
+					int dst_uoffset = 0;
+					src_yoffset = src_width*src_height;
+					dst_yoffset = dst_width*dst_height;
+					for (int i=0;i<dst_height/2;i++)
+					{
+						System.arraycopy(src_yuv, src_yoffset + src_uoffset, 
+								dst_yuv, dst_yoffset + dst_uoffset, dst_width);
+						src_uoffset += src_width;
+						dst_uoffset += dst_width;
+					}
 			    }
 			    break;
 			    
