@@ -1,9 +1,15 @@
 package com.android.testtool;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
 
 public class SvcEncoder {
@@ -322,14 +328,18 @@ public class SvcEncoder {
 					mAvcEncoders[i].queryInt(AvcEncoder.KEY_WIDTH, dst_width);
 					mAvcEncoders[i].queryInt(AvcEncoder.KEY_HEIGHT, dst_height);
 					
-					YuvUtils.YuvDownsample(mPrimeColorFormat, src_yuv, src_width, src_height, dst_yuv, dst_width[0], dst_height[0]);
+					dst_yuv = YuvUtils.YuvDownsample(mPrimeColorFormat, src_yuv, src_width, src_height, dst_width[0], dst_height[0]);
 					if (dst_yuv != null)
 					{
 						int blen = (int) (YuvUtils.BytesPerPixel(mPrimeColorFormat) * dst_width[0] * dst_height[0]);
 						res = mAvcEncoders[i].InputRawBuffer(dst_yuv, blen, timestamp, flag);
-						
+
 						//TODO:
 						//for rookie stage, no need to handle res, but for higher stage, I must handle it
+						
+						
+						
+						
 					}
 				}
 			}

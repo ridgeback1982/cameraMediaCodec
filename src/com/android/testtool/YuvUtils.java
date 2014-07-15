@@ -1,14 +1,25 @@
 package com.android.testtool;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import android.media.MediaCodecInfo;
+import android.os.Environment;
 
 
 
 class YuvUtils {
-	public static int YuvDownsample(int src_format, byte[] src_yuv, int src_width, int src_height, byte[] dst_yuv, int dst_width, int dst_height)
+	
+	//debug only
+	private static FileOutputStream mFOS = null;
+	
+	public static byte[] YuvDownsample(int src_format, byte[] src_yuv, int src_width, int src_height, int dst_width, int dst_height)
 	{
+		byte[] dst_yuv = null;
+		if (src_yuv == null)
+			return dst_yuv;
 		//simple implementation: copy the corner
 		if (src_width == dst_width && src_height == dst_height)
 		{
@@ -27,7 +38,6 @@ class YuvUtils {
 					int dst_yoffset = 0;
 					for (int i=0;i<dst_height;i++)
 					{
-						
 						System.arraycopy(src_yuv, src_yoffset, dst_yuv, dst_yoffset, dst_width);
 						src_yoffset += src_width;
 						dst_yoffset += dst_width;
@@ -79,8 +89,34 @@ class YuvUtils {
 		}
 		
 		
+		//debug only 
+//		if (mFOS == null && dst_width == 640 && dst_height == 360)
+//		{
+//			try {
+//	        	File dir = Environment.getExternalStorageDirectory();
+//	        	String fname = "640x360.yuv";
+//	            File filePath = new File(dir, fname);
+//	            if (filePath.exists() == true && filePath.isFile() == true)
+//	            	filePath.delete();
+//				mFOS = new FileOutputStream(filePath);
+//			} catch (Exception e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			}
+//		}
+//		if (mFOS != null && dst_width == 640 && dst_height == 360)
+//		{
+//			try {
+//				mFOS.write(dst_yuv, 0, dst_yuv.length);
+//				mFOS.flush();
+//			} catch (IOException e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			}
+//		}
 		
-		return 0;
+		
+		return dst_yuv;
 		
 	}
 	

@@ -105,23 +105,25 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="enc" />
+    
+     <CheckBox
+            android:id="@+id/checkBoxMultiEnc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MultiEnc" />
+     
     <CheckBox
             android:id="@+id/checkBoxAvcGotoFile"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="DumpAvc" />
+    
     <CheckBox
             android:id="@+id/checkBoxRawFromFile"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="RawInput" />
-    
-    <CheckBox
-            android:id="@+id/checkBoxMultiEnc"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="MultiEnc" />
-    
+
     <EditText
         android:id="@+id/FPSedit"
         android:layout_width="wrap_content"

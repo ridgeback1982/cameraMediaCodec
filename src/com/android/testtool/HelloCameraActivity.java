@@ -154,6 +154,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     int[] mSvcEncodeBPS;
     int	mPeriodKeyFrame = -1;	//ms
     private FileOutputStream mFOS = null;
+    private FileOutputStream[] mFOS_svc = null;
     byte[] mRawData = null;
     Queue<PreviewBufferInfo> mPreviewBuffers_clean = null;
     Queue<PreviewBufferInfo> mPreviewBuffers_dirty = null;
@@ -338,28 +339,36 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
         	    			//write avc to file
         	    			if (mAvcGotoFile == true)
         					{
-        						try {
-        							if (mFOS != null)
-        							{
-        								mFOS.close();
-        								mFOS = null;
-        							}
-        						} catch (IOException e) {
-        							// TODO Auto-generated catch block
-        							e.printStackTrace();
-        						}
-        						
-        	                    try {
-        	                    	File dir = Environment.getExternalStorageDirectory();
-        	                    	String fname = "mc_"+Integer.toString(RAW_PIC_WIDTH)+"x"+Integer.toString(RAW_PIC_HEIGHT)+".h264";
-        		                    File filePath = new File(dir, fname);
-        		                    if (filePath.exists() == true && filePath.isFile() == true)
-        		                    	filePath.delete();
-        							mFOS = new FileOutputStream(filePath);
-        						} catch (Exception e) {
-        							// TODO Auto-generated catch block
-        							e.printStackTrace();
-        						}
+        	    				//do not support svc of file source, :-)
+        	    				if (mMultiEncoder == false)
+        	    				{
+	        						try {
+	        							if (mFOS != null)
+	        							{
+	        								mFOS.close();
+	        								mFOS = null;
+	        							}
+	        						} catch (IOException e) {
+	        							// TODO Auto-generated catch block
+	        							e.printStackTrace();
+	        						}
+	        						
+	        	                    try {
+	        	                    	File dir = Environment.getExternalStorageDirectory();
+	        	                    	String fname = "mc_"+Integer.toString(RAW_PIC_WIDTH)+"x"+Integer.toString(RAW_PIC_HEIGHT)+".h264";
+	        		                    File filePath = new File(dir, fname);
+	        		                    if (filePath.exists() == true && filePath.isFile() == true)
+	        		                    	filePath.delete();
+	        							mFOS = new FileOutputStream(filePath);
+	        						} catch (Exception e) {
+	        							// TODO Auto-generated catch block
+	        							e.printStackTrace();
+	        						}
+        	    				}
+        	    				else{
+        	    					Toast.makeText(mThis, "Not supported: Svc goto file when file input", Toast.LENGTH_LONG).show();
+        	    					return;
+        	    				}
         					}
         	    			
         	    			
@@ -617,6 +626,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
         mSvcEncodeHeight = new int[] {90, 180, 360, 720};
         mSvcEncodeFPS = new int[] {6, 12, 24, 30};
         mSvcEncodeBPS = new int[] {64000, 180000, 520000, 1700000};
+        mFOS_svc = new FileOutputStream[MAX_SPACIAL_LAYER];
     	
     	
     	mCBVideoEncode = (CheckBox)findViewById(R.id.checkBoxEnableVideoEncode);
@@ -1431,29 +1441,32 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 			if (mRawHeight != siz.height || mRawWidth != siz.width)
 			{
 				Log.d(log_tag, "onPreviewFrame, pic size changed to "+siz.width+"x"+siz.height);
-				if (mAvcGotoFile == true)
+				if (mMultiEncoder == false)
 				{
-					try {
-						if (mFOS != null)
-						{
-							mFOS.close();
-							mFOS = null;
+					if (mAvcGotoFile == true)
+					{
+						try {
+							if (mFOS != null)
+							{
+								mFOS.close();
+								mFOS = null;
+							}
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
 						}
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-					
-                    try {
-                    	File dir = Environment.getExternalStorageDirectory();
-                    	String fname = "mc_"+Integer.toString(siz.width)+"x"+Integer.toString(siz.height)+".h264";
-	                    File filePath = new File(dir, fname);
-	                    if (filePath.exists() == true && filePath.isFile() == true)
-	                    	filePath.delete();
-						mFOS = new FileOutputStream(filePath);
-					} catch (Exception e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
+						
+	                    try {
+	                    	File dir = Environment.getExternalStorageDirectory();
+	                    	String fname = "mc_"+Integer.toString(siz.width)+"x"+Integer.toString(siz.height)+".h264";
+		                    File filePath = new File(dir, fname);
+		                    if (filePath.exists() == true && filePath.isFile() == true)
+		                    	filePath.delete();
+							mFOS = new FileOutputStream(filePath);
+						} catch (Exception e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
 					}
 				}
 				
@@ -1702,6 +1715,52 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 				if (arg1 != mAvcGotoFile)
 				{
 					mAvcGotoFile = arg1;
+					
+					if (mMultiEncoder == true)
+					{
+						if (mAvcGotoFile == true)
+						{
+							//TODO:
+							//create several file output stream
+							//mFOS_svc = new FileOutputStream[MAX_SPACIAL_LAYER];
+							for(int i=0;i<MAX_SPACIAL_LAYER;i++)
+							{
+								File dir = Environment.getExternalStorageDirectory();
+    	                    	String fname = "mc_"+Integer.toString(mSvcEncodeWidth[i])+"x"+Integer.toString(mSvcEncodeHeight[i])+"_svc.h264";
+    		                    File filePath = new File(dir, fname);
+    		                    if (filePath.exists() == true && filePath.isFile() == true)
+    		                    	filePath.delete();
+								
+								try {
+									mFOS_svc[i] = new FileOutputStream(filePath);
+								} catch (FileNotFoundException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+								
+							}
+						}
+						else
+						{
+							//TODO:
+							//stop and release file output stream
+							for(int i=0;i<MAX_SPACIAL_LAYER;i++)
+							{
+								try {
+									if (mFOS_svc[i] != null)
+									{
+										mFOS_svc[i].close();
+										mFOS_svc[i] = null;
+									}
+								} 
+								catch (IOException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+								
+							}
+						}
+					}
 				}
 			}
 			break;
@@ -1899,10 +1958,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 								int[] len = new int[1];
 								len[0] = mAvcBuf.length;
 								SvcEncodeOutputParam svc_output = new SvcEncodeOutputParam();
-								//long[] ts = new long[1];
-								//int[] flags = new int[1];
 								synchronized(mAvcEncLock) {
-									
 									if (mSvcEnc != null)
 									{
 										res = mSvcEnc.OutputAvcBuffer(mAvcBuf, len, svc_output);
@@ -1927,13 +1983,29 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 									//write avc to file, or calc the fps
 									if(mAvcGotoFile == true)
 									{
-										if(mFOS != null)
+										if (mMultiEncoder == false)
 										{
-											try {
-												mFOS.write(mAvcBuf, 0, len[0]);
-											} catch (IOException e) {
-												// TODO Auto-generated catch block
-												e.printStackTrace();
+											if(mFOS != null)
+											{
+												try {
+													mFOS.write(mAvcBuf, 0, len[0]);
+												} catch (IOException e) {
+													// TODO Auto-generated catch block
+													e.printStackTrace();
+												}
+											}
+										}
+										else
+										{
+											int layer_idx = svc_output.layerindex;
+											if (mFOS_svc[layer_idx] != null)
+											{
+												try {
+													mFOS_svc[layer_idx].write(mAvcBuf, 0, len[0]);
+												} catch (IOException e) {
+													// TODO Auto-generated catch block
+													e.printStackTrace();
+												}
 											}
 										}
 									}
