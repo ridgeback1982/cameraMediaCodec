@@ -83,6 +83,8 @@ public class AvcEncoder
 		mMC = null;
 		mSink = null;
 		mBI = null;
+		mFpsHelper = null;
+		mOutputBytesInStore = null;
 	}
 	
 	public int tryConfig(int width, int height, int framerate, int bitrate)

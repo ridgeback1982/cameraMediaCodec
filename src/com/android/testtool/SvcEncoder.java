@@ -4,6 +4,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.Queue;
 
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -29,6 +32,8 @@ public class SvcEncoder {
 	public static final String KEY_COLORFORMAT = "key_colorformat";
 	public static final String KEY_WIDTH = "key_width";
 	public static final String KEY_HEIGHT = "key_height";
+	
+	Queue<VideoBufferInfo>[] mRawDataQueue = null;
 	
 	
 	private static MediaCodecInfo selectCodec(String mimeType) {
@@ -79,6 +84,14 @@ public class SvcEncoder {
 	    
 	    mAvcEncoders = new AvcEncoder[SPACIAL_LAYER_CAPACITY];
 	    mSvcEncodeParams = new SvcEncodeSpacialParam[SPACIAL_LAYER_CAPACITY];
+	    
+	    mRawDataQueue = (LinkedList<VideoBufferInfo>[])new LinkedList<?>[SPACIAL_LAYER_CAPACITY];
+	    for (int i=0;i<SPACIAL_LAYER_CAPACITY;i++)
+	    {
+	    	mRawDataQueue[i] = new LinkedList<VideoBufferInfo>();
+	    }
+	    
+	    
 	    
 	    Log.i("SvcEnc", "Init --");
 	    return 0;
@@ -282,7 +295,7 @@ public class SvcEncoder {
 	
 	//TODO:
 	//For rookie: input one yuv frame, downsample it to the fit size as input to AvcEncoder one by one
-	//For pro: Need several(four spacial layers) queues. When method invoked, input downsampled(one spatial layer) yuv data into the corresponding queue, and
+	//For pro: Need one(four spacial layers) queue for each layer. When method invoked, input downsampled(one spatial layer) yuv data into the corresponding queue, and
 	//	then dequeue the queue to call "InputRawBuffer" one by one until the queue is empty. If "wait" is returned, the dequeue process should end also. 
 	//From my sight, yuv came from camera need go to pre-process(rotation and color conversion), then this big picture will go to SvcEncoder.
 	//In side of SvcEncoder, several downsample will be done
@@ -323,6 +336,7 @@ public class SvcEncoder {
 				if (mAvcEncoders[i] != null)
 				{
 					src_yuv = dst_yuv;
+					dst_yuv = null;
 					src_width = dst_width[0];
 					src_height = dst_height[0];
 					mAvcEncoders[i].queryInt(AvcEncoder.KEY_WIDTH, dst_width);
@@ -332,19 +346,41 @@ public class SvcEncoder {
 					if (dst_yuv != null)
 					{
 						int blen = (int) (YuvUtils.BytesPerPixel(mPrimeColorFormat) * dst_width[0] * dst_height[0]);
-						res = mAvcEncoders[i].InputRawBuffer(dst_yuv, blen, timestamp, flag);
-
-						//TODO:
-						//for rookie stage, no need to handle res, but for higher stage, I must handle it
-						
-						
-						
-						
-					}
-				}
-			}
-		}
+						if (mRawDataQueue[i] != null)
+						{
+							//For pro
+							VideoBufferInfo info = new VideoBufferInfo();
+							info.buffer = dst_yuv;
+							info.size = blen;
+							info.timestamp = timestamp;
+							info.flag = flag;
+							mRawDataQueue[i].add(info);
+							
+							Iterator<VideoBufferInfo> ite = mRawDataQueue[i].iterator();
+							while (ite.hasNext())
+							{
+								VideoBufferInfo infoo = ite.next();
+								res = mAvcEncoders[i].InputRawBuffer(dst_yuv, blen, timestamp, flag);
+								if (res != AvcEncoder.R_BUFFER_OK)
+								{
+									break;
+								}
+								infoo.buffer = null;
+								infoo = null;
+								ite.remove();
+							}
+						}
+						else
+						{
+							//for rookie stage, no need to handle res, but for higher stage, I must handle it
+							res = mAvcEncoders[i].InputRawBuffer(dst_yuv, blen, timestamp, flag);
+						}
+					}	//if (dst_yuv != null)
+				}	//if (mAvcEncoders[i] != null)
+			}	//if (mSvcEncodeParams[i] != null)
+		}	//for()
 		
+		dst_yuv = null;
 		return res;
 	}
 	

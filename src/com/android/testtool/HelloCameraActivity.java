@@ -156,10 +156,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     private FileOutputStream mFOS = null;
     private FileOutputStream[] mFOS_svc = null;
     byte[] mRawData = null;
-    Queue<PreviewBufferInfo> mPreviewBuffers_clean = null;
-    Queue<PreviewBufferInfo> mPreviewBuffers_dirty = null;
-    Queue<PreviewBufferInfo> mDecodeBuffers_clean = null;
-    Queue<PreviewBufferInfo> mDecodeBuffers_dirty = null;
+    Queue<VideoBufferInfo> mPreviewBuffers_clean = null;
+    Queue<VideoBufferInfo> mPreviewBuffers_dirty = null;
+    Queue<VideoBufferInfo> mDecodeBuffers_clean = null;
+    Queue<VideoBufferInfo> mDecodeBuffers_dirty = null;
     private final int PREVIEW_POOL_CAPACITY = 5;
     private final int DECODE_UNI_SIZE = 512*1024;		//512k for 1080p, it is enough
     long mPreviewBufferSize = 0;
@@ -315,9 +315,9 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 							}
             				
             				if (mPreviewBuffers_clean == null)
-            	    			mPreviewBuffers_clean = new LinkedList<PreviewBufferInfo>();
+            	    			mPreviewBuffers_clean = new LinkedList<VideoBufferInfo>();
             	    		if (mPreviewBuffers_dirty == null)
-            	    			mPreviewBuffers_dirty = new LinkedList<PreviewBufferInfo>();
+            	    			mPreviewBuffers_dirty = new LinkedList<VideoBufferInfo>();
  
         	    			mPreviewBuffers_clean.clear();
         	    			mPreviewBuffers_dirty.clear();
@@ -327,7 +327,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
         	    			for(int i=0;i<PREVIEW_POOL_CAPACITY;i++)
         	        		{
         	        			byte[] buf = new byte[size];
-        	        			PreviewBufferInfo info = new PreviewBufferInfo();
+        	        			VideoBufferInfo info = new VideoBufferInfo();
         	        			info.buffer = buf;
         	        			info.size = size;
         	        			info.timestamp = 0;
@@ -441,8 +441,9 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
             			
             			mCBVideoEncode.setEnabled(false);
             			mCBAvcGotoFile.setEnabled(false);
-            			mCBVideoDecode.setEnabled(false);
             			//mCBRawInput.setEnabled(false);
+            			mCBMultiEncoder.setEnabled(false);
+            			mCBVideoDecode.setEnabled(false);
             		}
             		else
             		{
@@ -508,6 +509,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
             			mCBVideoEncode.setEnabled(true);
             			mCBAvcGotoFile.setEnabled(true);
             			//mCBRawInput.setEnabled(true);
+            			mCBMultiEncoder.setEnabled(true);
             			mCBVideoDecode.setEnabled(true);
             		}
             		break;
@@ -617,10 +619,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	mRawWidth = 0;
     	mEncode_fps = 30;
     	mEncode_bps = 600000;
-    	mPreviewBuffers_clean = new LinkedList<PreviewBufferInfo>();
-    	mPreviewBuffers_dirty = new LinkedList<PreviewBufferInfo>();
-    	mDecodeBuffers_clean = new LinkedList<PreviewBufferInfo>();
-    	mDecodeBuffers_dirty = new LinkedList<PreviewBufferInfo>();
+    	mPreviewBuffers_clean = new LinkedList<VideoBufferInfo>();
+    	mPreviewBuffers_dirty = new LinkedList<VideoBufferInfo>();
+    	mDecodeBuffers_clean = new LinkedList<VideoBufferInfo>();
+    	mDecodeBuffers_dirty = new LinkedList<VideoBufferInfo>();
     	mAvcDecBug = new AvcDecoderBug();
     	mSvcEncodeWidth = new int[] {160, 320, 640, 1280};
         mSvcEncodeHeight = new int[] {90, 180, 360, 720};
@@ -689,7 +691,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 						synchronized(mAvcEncLock) {
 							if (!mPreviewBuffers_clean.isEmpty())
 							{
-								PreviewBufferInfo info = mPreviewBuffers_clean.poll();	//remove the head of queue
+								VideoBufferInfo info = mPreviewBuffers_clean.poll();	//remove the head of queue
 								info.timestamp = System.currentTimeMillis();
 								try {
 									int res = mRawIS.read(info.buffer, 0, info.size);
@@ -1090,9 +1092,9 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	{
     		synchronized(mAvcEncLock) {
 	    		if (mPreviewBuffers_clean == null)
-	    			mPreviewBuffers_clean = new LinkedList<PreviewBufferInfo>();
+	    			mPreviewBuffers_clean = new LinkedList<VideoBufferInfo>();
 	    		if (mPreviewBuffers_dirty == null)
-	    			mPreviewBuffers_dirty = new LinkedList<PreviewBufferInfo>();
+	    			mPreviewBuffers_dirty = new LinkedList<VideoBufferInfo>();
 	    		
 	    		int size = getPreviewBufferSize(mSelectWidth, mSelectHeight, mSelectColorFormat);
 	
@@ -1111,7 +1113,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	        			byte[] mem = new byte[size];
 	        			mCam.addCallbackBuffer(mem);	//ByteBuffer.array is a reference, not a copy
 	        			
-	        			PreviewBufferInfo info = new PreviewBufferInfo();
+	        			VideoBufferInfo info = new VideoBufferInfo();
 	        			info.buffer = null;
 	        			info.size = 0;
 	        			info.timestamp = 0;
@@ -1124,10 +1126,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	    			//TODO: return the rest of dirty buffer to camera
 	    			Log.i(log_tag, "startPreview, should I return the rest of dirty to camera?");
 	    			Log.i(log_tag, "dirty size:"+mPreviewBuffers_dirty.size()+", clean size:"+mPreviewBuffers_clean.size());
-	    			Iterator<PreviewBufferInfo> ite = mPreviewBuffers_dirty.iterator();
+	    			Iterator<VideoBufferInfo> ite = mPreviewBuffers_dirty.iterator();
 	    			while(ite.hasNext())
 	    			{
-	    				PreviewBufferInfo info = ite.next();
+	    				VideoBufferInfo info = ite.next();
 	    				mPreviewBuffers_clean.add(info);
 	    				ite.remove();
 	    				mCam.addCallbackBuffer(info.buffer);
@@ -1543,7 +1545,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 					synchronized(mAvcEncLock) {
 						if (mPreviewBuffers_clean.isEmpty() == false)	//impossible to be empty, :-)
 						{
-							PreviewBufferInfo info = mPreviewBuffers_clean.poll();	//remove the head of queue
+							VideoBufferInfo info = mPreviewBuffers_clean.poll();	//remove the head of queue
 							info.buffer = data;
 							info.size = getPreviewBufferSize(mRawWidth, mRawHeight, mSelectColorFormat);
 							info.timestamp = System.currentTimeMillis();
@@ -1780,13 +1782,13 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 				if (arg1 == true)
 				{
 					if (mDecodeBuffers_clean == null)
-		    			mDecodeBuffers_clean = new LinkedList<PreviewBufferInfo>();
+		    			mDecodeBuffers_clean = new LinkedList<VideoBufferInfo>();
 		    		if (mDecodeBuffers_dirty == null)
-		    			mDecodeBuffers_dirty = new LinkedList<PreviewBufferInfo>();
+		    			mDecodeBuffers_dirty = new LinkedList<VideoBufferInfo>();
 		    		
 		    		for(int i=0;i<PREVIEW_POOL_CAPACITY;i++)
 	        		{
-	        			PreviewBufferInfo info = new PreviewBufferInfo();
+	        			VideoBufferInfo info = new VideoBufferInfo();
 	        			info.buffer = new byte[DECODE_UNI_SIZE];
 	        			info.size = 0;
 	        			info.timestamp = 0;
@@ -1883,10 +1885,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 								{
 									if (mPreviewBuffers_dirty != null && mPreviewBuffers_clean != null)
 									{
-										Iterator<PreviewBufferInfo> ite = mPreviewBuffers_dirty.iterator();
+										Iterator<VideoBufferInfo> ite = mPreviewBuffers_dirty.iterator();
 										while (ite.hasNext())
 										{
-											PreviewBufferInfo info = ite.next();
+											VideoBufferInfo info = ite.next();
 											byte[] data = info.buffer;
 											int data_size = info.size;
 											if (mSelectColorFormat == ImageFormat.YV12)
@@ -2028,10 +2030,10 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 										)
 									{
 										synchronized(mAvcDecLock) {
-											Iterator<PreviewBufferInfo> ite = mDecodeBuffers_clean.iterator();
+											Iterator<VideoBufferInfo> ite = mDecodeBuffers_clean.iterator();
 											if (ite.hasNext())
 											{
-												PreviewBufferInfo info = ite.next();
+												VideoBufferInfo info = ite.next();
 												if (info.buffer.length >= len[0])
 												{
 													info.timestamp = svc_output.timestamp;
@@ -2126,11 +2128,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 									//STEP 1: handle input buffer
 									if (mDecodeBuffers_dirty != null && mDecodeBuffers_clean != null)
 									{
-										Iterator<PreviewBufferInfo> ite = mDecodeBuffers_dirty.iterator();
+										Iterator<VideoBufferInfo> ite = mDecodeBuffers_dirty.iterator();
 										while (ite.hasNext())
 										{
 											int flag = 0;
-											PreviewBufferInfo info = ite.next();
+											VideoBufferInfo info = ite.next();
 
 											//ASSUME: 
 											//A. there is no sub sps, appending to sps
@@ -2314,12 +2316,5 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
         System.arraycopy(yv12bytes, width*height+width*height/4, i420bytes, width*height, width*height/4);  
         System.arraycopy(yv12bytes, width*height, i420bytes, width*height+width*height/4, width*height/4);    
     } 
-    
-    private class PreviewBufferInfo
-    {
-    	public byte[] buffer;
-    	public int size;
-    	public long timestamp;
-    }
     
 }
