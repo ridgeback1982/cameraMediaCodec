@@ -2249,11 +2249,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 													//just request a new IDR
 													if (mSvcEnc != null)
 													{
-														Log.w(log_tag, "AvcDecoder error met(InputAvcBuffer), so request a new IDR");
 														mAvcDec.stop();
 														
 														if (Build.VERSION.SDK_INT <= 17)	//for "CP-DX80"
 														{
+															Log.w(log_tag, "AvcDecoder error met(InputAvcBuffer), so request a new IDR");
 															mSvcEnc.RequestKeyFrameSoon();
 														}
 													}
@@ -2307,11 +2307,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 											//just request a new IDR
 											if (mSvcEnc != null)
 											{
-												Log.w(log_tag, "AvcDecoder error met(OutputRawBuffer), so request a new IDR");
 												mAvcDec.stop();
 												
 												if (Build.VERSION.SDK_INT <= 17)	//for "CP-DX80"
 												{
+													Log.w(log_tag, "AvcDecoder error met(OutputRawBuffer), so request a new IDR");
 													mSvcEnc.RequestKeyFrameSoon();
 												}
 											}
