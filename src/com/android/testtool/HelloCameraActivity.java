@@ -355,7 +355,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 	        						
 	        	                    try {
 	        	                    	File dir = Environment.getExternalStorageDirectory();
-	        	                    	String fname = "mc_"+Integer.toString(RAW_PIC_WIDTH)+"x"+Integer.toString(RAW_PIC_HEIGHT)+".h264";
+	        	                    	String fname = "mc_"+Integer.toString(RAW_PIC_WIDTH)+"x"+Integer.toString(RAW_PIC_HEIGHT)+"_bk.h264";
 	        		                    File filePath = new File(dir, fname);
 	        		                    if (filePath.exists() == true && filePath.isFile() == true)
 	        		                    	filePath.delete();
@@ -611,7 +611,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     	
     	mEnableVideoEncode = false;
     	mEnableVideoDecode = false;
-    	mPeriodKeyFrame = -1;		//test for request key frame, ms period
+    	mPeriodKeyFrame = -1;		//test for request key frame, ms period, 10*1000
     	mAvcGotoFile = false;		//really for debug, write files
     	mEnableRawInput = false;
     	mMultiEncoder = false;
@@ -1363,6 +1363,12 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
     			list_string_cf.add(str);
     			}
     			break;
+    		case 20:
+	    		{
+	    			String str = new String("YUY2");
+	    			list_string_cf.add(str);
+	    		}
+    			break;
     		}
     	}
     	ArrayAdapter<String> adapter_cf = new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,list_string_cf);
@@ -1478,6 +1484,16 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 				mEventHandler.removeMessages(EVENT_CALC_ENCODE_FPS);
 				mEventHandler.sendEmptyMessage(EVENT_CALC_ENCODE_FPS);
 				
+				
+				if (m_CodecMsgHandler != null)
+				{
+					m_CodecMsgHandler.removeMessages(EVENT_GET_ENCODE_OUTPUT);
+					if (mPeriodKeyFrame > 0)
+					{
+						m_CodecMsgHandler.removeMessages(EVENT_REQUEST_KEY_FRAME);
+					}
+				}
+				
 				synchronized(mAvcEncLock) {
 	    			mRawHeight = siz.height;
 					mRawWidth = siz.width;
@@ -1487,6 +1503,14 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 				    if (mSvcEnc != null)
 				    {
 				    	mSvcEnc.Stop();
+				    	
+				    	//hard code, for compatible
+				    	if (Build.VERSION.SDK_INT <= 17)	//for "CP-DX80"
+				    	{
+				    		mSvcEnc.Uninit();
+					    	mSvcEnc.Init();
+				    	}
+				    	
 					    int capa = mSvcEnc.GetSpacialLayerCapacity();
 					    SvcEncodeSpacialParam[] params = new SvcEncodeSpacialParam[capa];
 					    if (mMultiEncoder == false)
@@ -1518,13 +1542,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 				
 				if (m_CodecMsgHandler != null)
 				{
-					m_CodecMsgHandler.removeMessages(EVENT_GET_ENCODE_OUTPUT);
 					m_CodecMsgHandler.sendEmptyMessage(EVENT_GET_ENCODE_OUTPUT);
 					
 					if (mPeriodKeyFrame > 0)
 					{
-						m_CodecMsgHandler.removeMessages(EVENT_REQUEST_KEY_FRAME);
-						m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_REQUEST_KEY_FRAME, 30);
+						m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_REQUEST_KEY_FRAME, mPeriodKeyFrame);
 					}
 				}
 				
@@ -1879,7 +1901,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 						case EVENT_GET_ENCODE_OUTPUT:
 						{
 							//STEP 1: handle input buffer
-							int res = AvcEncoder.R_BUFFER_OK;
+							int res = AvcUtils.R_BUFFER_OK;
 							synchronized(mAvcEncLock) {
 								if (mSvcEnc != null)
 								{
@@ -1927,7 +1949,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 												}
 											}
 											res = mSvcEnc.InputRawBuffer(mRawData, data_size, info.timestamp, flag);
-											if (res != AvcEncoder.R_BUFFER_OK)
+											if (res != AvcUtils.R_BUFFER_OK)
 											{
 												Log.w(log_tag, "mAvcEnc.InputRawBuffer, maybe wrong:"+res);
 												break;		//the rest buffers shouldn't go into encoder, if the previous one get problem 
@@ -1954,8 +1976,8 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 							
 									
 							//STEP 2: handle output buffer
-							res = AvcEncoder.R_BUFFER_OK;
-							while(res == AvcEncoder.R_BUFFER_OK)
+							res = AvcUtils.R_BUFFER_OK;
+							while(res == AvcUtils.R_BUFFER_OK)
 							{
 								int[] len = new int[1];
 								len[0] = mAvcBuf.length;
@@ -1973,11 +1995,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 									}
 									else
 									{
-										res = AvcEncoder.R_TRY_AGAIN_LATER;
+										res = AvcUtils.R_TRY_AGAIN_LATER;
 									}
 								}
 								
-								if (res == AvcEncoder.R_BUFFER_OK)
+								if (res == AvcUtils.R_BUFFER_OK)
 								{
 									mFrameCountOutofEncoder ++;
 									//Log.d(log_tag, "mFrameCountOutofEncoder = "+mFrameCountOutofEncoder);
@@ -2051,11 +2073,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 									
 									//Log.i(log_tag, "get encoded data, len="+len[0]);
 								}
-								else if (res == AvcEncoder.R_OUTPUT_UPDATE)
+								else if (res == AvcUtils.R_OUTPUT_UPDATE)
 								{
-									res = AvcEncoder.R_BUFFER_OK;
+									res = AvcUtils.R_BUFFER_OK;
 								}
-								else if (res == AvcEncoder.R_TRY_AGAIN_LATER)
+								else if (res == AvcUtils.R_TRY_AGAIN_LATER)
 								{
 //											try {
 //												Thread.sleep(1);
@@ -2078,39 +2100,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 						{
 							if (mSvcEnc != null)
 							{
-								if (Build.VERSION.SDK_INT < 19)
-								{
-									synchronized(mAvcEncLock) {
-										Log.d(log_tag, "CodecThread, EVENT_REQUEST_KEY_FRAME under api level 19");
-										mSvcEnc.Stop();
-		        					    int capa = mSvcEnc.GetSpacialLayerCapacity();
-		        					    SvcEncodeSpacialParam[] params = new SvcEncodeSpacialParam[capa];
-		        					    if (mMultiEncoder == false)
-		        					    {
-			        					    params[0] = new SvcEncodeSpacialParam();
-			        					    params[0].mWidth = mRawWidth;
-			        					    params[0].mHeight = mRawHeight;
-			        					    params[0].mFrameRate = mEncode_fps;
-			        					    params[0].mBitrate = mEncode_bps;
-		        					    }
-		        					    else
-		        					    {
-		        					    	for(int i=0;i<capa;i++)
-		        					    	{
-		        					    		params[i] = new SvcEncodeSpacialParam();
-		        					    		params[i].mWidth = mSvcEncodeWidth[i];
-				        					    params[i].mHeight = mSvcEncodeHeight[i];
-				        					    params[i].mFrameRate = mSvcEncodeFPS[i];
-				        					    params[i].mBitrate = mSvcEncodeBPS[i];
-		        					    	}
-		        					    }
-		        					    mSvcEnc.Configure(params);
-		        						mSvcEnc.Start();
-									}
-								}
-								else {
-									mSvcEnc.RequestKeyFrameSoon();
-								}
+								mSvcEnc.RequestKeyFrameSoon();
 							}
 							
 							if (mPeriodKeyFrame > 0)
@@ -2123,7 +2113,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 							if (mAvcDec != null)
 							{
 								synchronized(mAvcDecLock) {
-									int res = AvcDecoder.R_BUFFER_OK;
+									int res = AvcUtils.R_BUFFER_OK;
 									
 									//STEP 1: handle input buffer
 									if (mDecodeBuffers_dirty != null && mDecodeBuffers_clean != null)
@@ -2205,6 +2195,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 													boolean drop =  mAvcDecBug.ShouldDropAvcFrame(mFrameCountIntoDecoder, nal_type);
 													if (drop == true)
 													{
+														mAvcDecBug.EnableDrop(false); 	//just drop once
 														mFrameCountIntoDecoder ++;
 														ite.remove();
 														mDecodeBuffers_clean.add(info);
@@ -2228,6 +2219,12 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 														mCurAvcDecoderHeight = height[0];
 //														mFrameCountIntoDecoder = 0;
 //														mFrameCountOutofDecoder = 0;
+														
+														if (Build.VERSION.SDK_INT <= 17)	//for "CP-DX80"
+												    	{
+															mAvcDec.Uninit();
+															mAvcDec.Init();
+												    	}
 													
 														mAvcDec.stop();													
 														mAvcDec.tryConfig(mSurfaceDecoder.getHolder().getSurface(), sps_nal, pps_nal);
@@ -2243,9 +2240,25 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 											}
 											
 											res = mAvcDec.InputAvcBuffer(info.buffer, info.size, info.timestamp, flag);
-											if (res != AvcDecoder.R_BUFFER_OK)
+											if (res != AvcUtils.R_BUFFER_OK)
 											{
 												//Log.w(log_tag, "mAvcDec.InputAvcBuffer, maybe wrong:"+res);
+												if (res == AvcUtils.R_INVALID_STATE)
+												{
+													//means code error, maybe OMX_ErrorStreamCorrupt, maybe OMX_ErrorMbErrorsInFrame
+													//just request a new IDR
+													if (mSvcEnc != null)
+													{
+														Log.w(log_tag, "AvcDecoder error met(InputAvcBuffer), so request a new IDR");
+														mAvcDec.stop();
+														
+														if (Build.VERSION.SDK_INT <= 17)	//for "CP-DX80"
+														{
+															mSvcEnc.RequestKeyFrameSoon();
+														}
+													}
+												}
+												
 												break;		//the rest buffers shouldn't go into decoder, if the previous one get problem 
 											}
 											else
@@ -2262,12 +2275,12 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 									//STEP 2: handle output buffer
 									int[] len = new int[1];
 									long[] ts = new long[1];
-									res = AvcDecoder.R_BUFFER_OK;
-									while(res == AvcDecoder.R_BUFFER_OK)
+									res = AvcUtils.R_BUFFER_OK;
+									while(res == AvcUtils.R_BUFFER_OK)
 									{
 										res = mAvcDec.OutputRawBuffer(null, len, ts);
 										
-										if (res == AvcDecoder.R_BUFFER_OK)
+										if (res == AvcUtils.R_BUFFER_OK)
 										{
 											mFrameCountOutofDecoder ++;
 											mDelay_lastDecodeTick = ts[0];
@@ -2275,11 +2288,11 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 											
 											//Log.i(log_tag, "get decoded data, len="+len[0]);
 										}
-										else if (res == AvcDecoder.R_OUTPUT_UPDATE)
+										else if (res == AvcUtils.R_OUTPUT_UPDATE)
 										{
-											res = AvcDecoder.R_BUFFER_OK;
+											res = AvcUtils.R_BUFFER_OK;
 										}
-										else if (res == AvcDecoder.R_TRY_AGAIN_LATER)
+										else if (res == AvcUtils.R_TRY_AGAIN_LATER)
 										{
 //											try {
 //												Thread.sleep(1);
@@ -2288,13 +2301,28 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 //												e.printStackTrace();
 //											}
 										}
+										else if (res == AvcUtils.R_INVALID_STATE)
+										{
+											//means code error, maybe OMX_ErrorStreamCorrupt, maybe OMX_ErrorMbErrorsInFrame
+											//just request a new IDR
+											if (mSvcEnc != null)
+											{
+												Log.w(log_tag, "AvcDecoder error met(OutputRawBuffer), so request a new IDR");
+												mAvcDec.stop();
+												
+												if (Build.VERSION.SDK_INT <= 17)	//for "CP-DX80"
+												{
+													mSvcEnc.RequestKeyFrameSoon();
+												}
+											}
+										}
 										else
 										{
 											//not possible from Android doc
 										}
 									}
-								}
-							}
+								}	//synchronized(mAvcDecLock)
+							}	//if (mAvcDec != null)
 							
 							m_CodecMsgHandler.sendEmptyMessageDelayed(EVENT_GO_DECODE, 10);
 						}

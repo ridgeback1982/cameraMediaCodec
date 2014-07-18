@@ -11,17 +11,12 @@ import java.util.Queue;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
 
 public class SvcEncoder {
-	
-	public static final int R_BUFFER_OK = 0;
-	public static final int R_TRY_AGAIN_LATER = -1;
-	public static final int R_OUTPUT_UPDATE = -2;
-	public static final int R_INVALIDATE_BUFFER_SIZE = -10;
-	public static final int R_UNKNOWN = -40;
 	
 	private final int SPACIAL_LAYER_CAPACITY = 4;
 	private int mMaxSpacialLayerIndex = 0;
@@ -105,6 +100,16 @@ public class SvcEncoder {
 			return 1;
 		}
 		
+		UninitAvcEncoders();
+		mSvcEncodeParams = null;
+		mRawDataQueue = null;
+		//mMaxSpacialLayerIndex = 0;
+		Log.i("SvcEnc", "Uninit --");
+		return 0;
+	}
+	
+	private void UninitAvcEncoders()
+	{
 		for(int i=0;i<mAvcEncoders.length;i++)
 	    {
 	    	if(mAvcEncoders[i] != null)
@@ -113,9 +118,6 @@ public class SvcEncoder {
 	    		mAvcEncoders[i] = null;
 	    	}
 	    }
-		//mMaxSpacialLayerIndex = 0;
-		Log.i("SvcEnc", "Uninit --");
-		return 0;
 	}
 	
 	public int GetSpacialLayerCapacity()
@@ -148,7 +150,8 @@ public class SvcEncoder {
 					}
 					
 					mAvcEncoders[i].tryConfig(enc_params[i].mWidth, enc_params[i].mHeight, enc_params[i].mFrameRate, enc_params[i].mBitrate);
-					mSvcEncodeParams[i] = enc_params[i].clone();
+					if (mSvcEncodeParams[i] != enc_params[i])
+						mSvcEncodeParams[i] = enc_params[i].clone();
 					if (mMaxSpacialLayerIndex < i)
 						mMaxSpacialLayerIndex = i;
 				}
@@ -279,13 +282,26 @@ public class SvcEncoder {
 			return 1;
 		}
 		
-		for(int i=0;i<SPACIAL_LAYER_CAPACITY;i++)
+		if (Build.VERSION.SDK_INT < 19)
 		{
-			if (mSvcEncodeParams[i] != null)
+			Stop();
+			//hard code, for compatible
+	    	if (Build.VERSION.SDK_INT <= 17)	//for "CP-DX80"
+	    	{
+	    		UninitAvcEncoders();
+	    		Configure(mSvcEncodeParams);
+	    	}
+	    	Start();
+		}
+		else {
+			for(int i=0;i<SPACIAL_LAYER_CAPACITY;i++)
 			{
-				if (mAvcEncoders[i] != null)
+				if (mSvcEncodeParams[i] != null)
 				{
-					mAvcEncoders[i].RequestKeyFrameSoon();
+					if (mAvcEncoders[i] != null)
+					{
+						mAvcEncoders[i].RequestKeyFrameSoon();
+					}
 				}
 			}
 		}
@@ -302,7 +318,7 @@ public class SvcEncoder {
 	
 	public int InputRawBuffer(/*in*/byte[] bytes, /*in*/int len, /*in*/long timestamp, /*flag*/int flag)
 	{
-		int res = AvcEncoder.R_UNKNOWN;
+		int res = AvcUtils.R_UNKNOWN;
 		//rookie stage now
 		if (mAvcEncoders == null)
 		{
@@ -320,7 +336,7 @@ public class SvcEncoder {
 		int raw_siz_check = (int) (YuvUtils.BytesPerPixel(mPrimeColorFormat) * dst_width[0] * dst_height[0]);
 		if (raw_siz_check > len)
 		{
-			res = AvcEncoder.R_INVALIDATE_BUFFER_SIZE;
+			res = AvcUtils.R_INVALIDATE_BUFFER_SIZE;
 			return res;
 		}
 		
@@ -361,7 +377,7 @@ public class SvcEncoder {
 							{
 								VideoBufferInfo infoo = ite.next();
 								res = mAvcEncoders[i].InputRawBuffer(dst_yuv, blen, timestamp, flag);
-								if (res != AvcEncoder.R_BUFFER_OK)
+								if (res != AvcUtils.R_BUFFER_OK)
 								{
 									break;
 								}
@@ -392,11 +408,11 @@ public class SvcEncoder {
 	//3. int[] len = new int[1]
 	public int OutputAvcBuffer(/*in*/byte[] bytes, /*in, out*/int[] len, /*out*/SvcEncodeOutputParam output)
 	{
-		int res = AvcEncoder.R_UNKNOWN;
+		int res = AvcUtils.R_UNKNOWN;
 		//rookie stage now
 		if (mAvcEncoders == null)
 		{
-			return AvcEncoder.R_UNKNOWN;
+			return AvcUtils.R_UNKNOWN;
 		}
 		
 		int layeridx = mMaxSpacialLayerIndex;
@@ -409,7 +425,7 @@ public class SvcEncoder {
 					long[] ts = new long[1];
 					int[] flag = new int[1];
 					res = mAvcEncoders[layeridx].OutputAvcBuffer(bytes, len, ts, flag);
-					if (AvcEncoder.R_BUFFER_OK == res)
+					if (AvcUtils.R_BUFFER_OK == res)
 					{
 						int[] width = new int[1];
 						int[] height = new int[1];

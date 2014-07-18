@@ -6,6 +6,14 @@ import android.util.Log;
 
 
 public class AvcUtils {
+	
+	public static final int R_BUFFER_OK = 0;
+	public static final int R_TRY_AGAIN_LATER = -1;
+	public static final int R_OUTPUT_UPDATE = -2;
+	public static final int R_INVALID_STATE = -3;
+	public static final int R_INVALIDATE_BUFFER_SIZE = -10;
+	public static final int R_UNKNOWN = -40;
+	
 	public static final int START_PREFIX_CODE = 0x00000001;
 	public static final int START_PREFIX_LENGTH = 4;
 	public static final int NAL_UNIT_HEADER_LENGTH = 1;

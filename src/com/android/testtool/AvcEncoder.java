@@ -17,12 +17,6 @@ interface AvcEncoderSink
 
 public class AvcEncoder
 {
-	public static final int R_BUFFER_OK = 0;
-	public static final int R_TRY_AGAIN_LATER = -1;
-	public static final int R_OUTPUT_UPDATE = -2;
-	public static final int R_INVALIDATE_BUFFER_SIZE = -10;
-	public static final int R_UNKNOWN = -40;
-	
 	public static final int STATUS_INVALID = 0;	//
 	public static final int STATUS_LOADED = 1;	//component loaded, but not initialized. only accept call of set/getparameter
 	public static final int STATUS_IDLE = 2;	//component initialized, ready to start
@@ -177,7 +171,7 @@ public class AvcEncoder
 		if (mMC != null)
 		{
 			//mMC.signalEndOfInputStream();  //it can only be used with Surface input
-			mMC.flush();
+			//mMC.flush();
 			mMC.stop();
 			mStatus = STATUS_IDLE;
 		}
@@ -223,15 +217,23 @@ public class AvcEncoder
 		if (mStatus != STATUS_EXEC)
 		{
 			//Log.d("AvcEncoder", "wrong status:"+mStatus);
-			return R_TRY_AGAIN_LATER;
+			return AvcUtils.R_TRY_AGAIN_LATER;
 		}
 		
 		if (true == mFpsHelper.ShouldBeDropped(timestamp))
 		{
-			return R_BUFFER_OK;
+			return AvcUtils.R_BUFFER_OK;
 		}
 		
-		int inputbufferindex = mMC.dequeueInputBuffer(BUFFER_TIMEOUT);
+		int inputbufferindex = 0;
+		try{
+			inputbufferindex = mMC.dequeueInputBuffer(BUFFER_TIMEOUT);
+		}
+		catch (IllegalStateException ex)
+		{
+			Log.e("AvcEncoder", "dequeueInputBuffer throw IllegalStateException");
+			return AvcUtils.R_INVALID_STATE;
+		}
 		if (inputbufferindex >= 0)
 		{
 			ByteBuffer inputBuffer = mInputBuffers[inputbufferindex];
@@ -242,7 +244,7 @@ public class AvcEncoder
 			{
 				mMC.queueInputBuffer(inputbufferindex, 0, 0, timestamp, flag); 	//return the buffer to OMX quickly
 				Log.e("AvcEncoder", "InputRawBuffer, input size invalidate, capacity="+capacity+",len="+len);
-				return R_INVALIDATE_BUFFER_SIZE;
+				return AvcUtils.R_INVALIDATE_BUFFER_SIZE;
 			}
 			
 			inputBuffer.put(bytes, 0, len);
@@ -260,14 +262,14 @@ public class AvcEncoder
 //				e.printStackTrace();
 //			}
 			
-			return R_TRY_AGAIN_LATER;
+			return  AvcUtils.R_TRY_AGAIN_LATER;
 		}
 		else
 		{
 			//unexpected return value, not specified in Android doc
-			return R_UNKNOWN;
+			return AvcUtils.R_UNKNOWN;
 		}
-		return R_BUFFER_OK;
+		return AvcUtils.R_BUFFER_OK;
 	}
 	
 	//usage: int[] len = new int[1];
@@ -279,7 +281,7 @@ public class AvcEncoder
 		if (mStatus != STATUS_EXEC)
 		{
 			//Log.d("AvcEncoder", "wrong status:"+mStatus);
-			return R_TRY_AGAIN_LATER;
+			return AvcUtils.R_TRY_AGAIN_LATER;
 		}
 		
 		if (mOutputBytesInStore != null)
@@ -289,7 +291,7 @@ public class AvcEncoder
 				Log.w("AvcEncoder", "OutputAvcBuffer, len is still too small, requre at least "+ mOutputBytesInStore.length);
 				if (mSink != null)
 					mSink.onUpdateOutputBufferSize(mOutputBytesInStore.length);
-				return R_INVALIDATE_BUFFER_SIZE;
+				return AvcUtils.R_INVALIDATE_BUFFER_SIZE;
 			}
 			else
 			{
@@ -300,11 +302,19 @@ public class AvcEncoder
 				
 				mOutputBytesInStore_timestamp = 0;
 				mOutputBytesInStore = null;
-				return R_BUFFER_OK;
+				return AvcUtils.R_BUFFER_OK;
 			}
 		}
 		
-		int outputbufferindex = mMC.dequeueOutputBuffer(mBI, BUFFER_TIMEOUT);
+		int outputbufferindex = 0;
+		try {
+			outputbufferindex = mMC.dequeueOutputBuffer(mBI, BUFFER_TIMEOUT);
+		}
+		catch (IllegalStateException ex)
+		{
+			Log.e("AvcEncoder", "dequeueOutputBuffer throw IllegalStateException");
+			return AvcUtils.R_INVALID_STATE;
+		}
 		if (outputbufferindex >= 0)
 		{
 			mOutputBuffers[outputbufferindex].position(mBI.offset);
@@ -319,12 +329,16 @@ public class AvcEncoder
 				mOutputBytesInStore_timestamp = mBI.presentationTimeUs;
 				mOutputBuffers[outputbufferindex].get(mOutputBytesInStore);
 				mMC.releaseOutputBuffer(outputbufferindex, false);
-				return R_INVALIDATE_BUFFER_SIZE;
+				return AvcUtils.R_INVALIDATE_BUFFER_SIZE;
 			}
 			mOutputBuffers[outputbufferindex].get(bytes, 0, mBI.size);
 			len[0] = mBI.size ;
 			timestamp[0] = mBI.presentationTimeUs;
 			flags[0] = mBI.flags;
+			
+			if (mBI.flags == MediaCodec.BUFFER_FLAG_SYNC_FRAME)
+				Log.d("AvcEncoder", "OutputAvcBuffer SYNC frame, "+mWidth+"x "+mHeight);
+			
 			mMC.releaseOutputBuffer(outputbufferindex, false);
 			
 			//Log.i("AvcEncoder", "OutputAvcBuffer -- OK at "+ outputbufferindex+", size="+len[0]);
@@ -333,7 +347,7 @@ public class AvcEncoder
 		{
 			mOutputBuffers = mMC.getOutputBuffers();
 			Log.i("AvcEncoder", "OutputAvcBuffer -- INFO_OUTPUT_BUFFERS_CHANGED");
-			return R_OUTPUT_UPDATE;
+			return AvcUtils.R_OUTPUT_UPDATE;
 		}
 		else if (outputbufferindex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED)
 		{
@@ -348,7 +362,7 @@ public class AvcEncoder
 			//int new_fps = mMF.getInteger(MediaFormat.KEY_FRAME_RATE);
 			
 			//Log.i("AvcEncoder", "OutputAvcBuffer -- INFO_OUTPUT_FORMAT_CHANGED: "+new_width+"x"+new_height+"@"+new_fps+/*",in "+new_bps+"bps"+*/", cf="+new_cf);
-			return R_OUTPUT_UPDATE;
+			return AvcUtils.R_OUTPUT_UPDATE;
 		}
 		else if (outputbufferindex == MediaCodec.INFO_TRY_AGAIN_LATER)
 		{
@@ -360,15 +374,15 @@ public class AvcEncoder
 //				e.printStackTrace();
 //			}
 			
-			return R_TRY_AGAIN_LATER;
+			return AvcUtils.R_TRY_AGAIN_LATER;
 		}
 		else
 		{
 			//unexpected return value, not specified in Android doc
-			return R_UNKNOWN;
+			return AvcUtils.R_UNKNOWN;
 		}
 		
 		
-		return R_BUFFER_OK;
+		return AvcUtils.R_BUFFER_OK;
 	}
 }
