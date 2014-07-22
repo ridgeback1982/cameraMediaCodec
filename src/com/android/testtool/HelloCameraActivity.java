@@ -411,7 +411,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
 			        					    params[i].mBitrate = mSvcEncodeBPS[i];
 	        					    	}
 	        					    }
-	        					    mSvcEnc.Configure(params);
+	        					    mSvcEnc.Configure(params, 60);
 	        						mSvcEnc.Start();
 	        						
 	        						//if (Build.VERSION.SDK_INT >= 19)
@@ -1532,7 +1532,7 @@ public class HelloCameraActivity extends Activity implements SurfaceHolder.Callb
         					    params[i].mBitrate = mSvcEncodeBPS[i];
 					    	}
 					    }
-					    mSvcEnc.Configure(params);
+					    mSvcEnc.Configure(params, 60);
 						mSvcEnc.Start();
 					
 						//if (Build.VERSION.SDK_INT >= 19)

@@ -7,6 +7,10 @@ public class SvcEncodeSpacialParam implements Cloneable{
 	public int		mFrameRate;
 	public int		mBitrate;
 	
+	//fix me, it is not general SVC encoder logic
+	public int		mStreamID;
+	public int		mModeIdx;
+	
 	public SvcEncodeSpacialParam clone() {  
 		SvcEncodeSpacialParam o = null;  
         try {  

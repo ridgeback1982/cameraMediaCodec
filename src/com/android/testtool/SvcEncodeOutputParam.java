@@ -18,6 +18,11 @@ public class SvcEncodeOutputParam implements Cloneable{
 	public int			maxtemporalid;
 	
 	
+	//fix me, it is not general SVC encoder logic
+	public int			streamid;
+	public int			modeindex;
+	
+	
 	
 	
 	public SvcEncodeOutputParam clone() {  

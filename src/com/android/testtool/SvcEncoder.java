@@ -29,6 +29,7 @@ public class SvcEncoder {
 	public static final String KEY_HEIGHT = "key_height";
 	
 	Queue<VideoBufferInfo>[] mRawDataQueue = null;
+	private int mPeriodIDR = 60;	/*seconds*/
 	
 	
 	private static MediaCodecInfo selectCodec(String mimeType) {
@@ -129,7 +130,7 @@ public class SvcEncoder {
 	//int capa = GetSpacialLayerCapacity();
 	//SvcEncodeSpacialParam[] params = new SvcEncodeSpacialParam[capa];
 	//param[3].mWidth = ....
-	public int Configure(SvcEncodeSpacialParam[] enc_params)
+	public int Configure(SvcEncodeSpacialParam[] enc_params, int period_idr/*seconds*/)
 	{
 		Log.i("SvcEnc", "Configure ++");
 		if (mAvcEncoders == null || enc_params.length > SPACIAL_LAYER_CAPACITY)
@@ -148,6 +149,9 @@ public class SvcEncoder {
 						mAvcEncoders[i] = new AvcEncoder();
 						mAvcEncoders[i].Init(mPrimeColorFormat, null);
 					}
+					
+					mPeriodIDR = period_idr;
+					mAvcEncoders[i].setInt(AvcEncoder.KEY_IDR_INTERVAL, mPeriodIDR);
 					
 					mAvcEncoders[i].tryConfig(enc_params[i].mWidth, enc_params[i].mHeight, enc_params[i].mFrameRate, enc_params[i].mBitrate);
 					if (mSvcEncodeParams[i] != enc_params[i])
@@ -289,7 +293,7 @@ public class SvcEncoder {
 	    	if (Build.VERSION.SDK_INT <= 17)	//for "CP-DX80"
 	    	{
 	    		UninitAvcEncoders();
-	    		Configure(mSvcEncodeParams);
+	    		Configure(mSvcEncodeParams, mPeriodIDR);
 	    	}
 	    	Start();
 		}
@@ -333,7 +337,7 @@ public class SvcEncoder {
 			mAvcEncoders[mMaxSpacialLayerIndex].queryInt(AvcEncoder.KEY_WIDTH, dst_width);
 			mAvcEncoders[mMaxSpacialLayerIndex].queryInt(AvcEncoder.KEY_HEIGHT, dst_height);
 		}
-		int raw_siz_check = (int) (YuvUtils.BytesPerPixel(mPrimeColorFormat) * dst_width[0] * dst_height[0]);
+		int raw_siz_check = (int) (RawUtils.BytesPerPixel(mPrimeColorFormat) * dst_width[0] * dst_height[0]);
 		if (raw_siz_check > len)
 		{
 			res = AvcUtils.R_INVALIDATE_BUFFER_SIZE;
@@ -358,10 +362,10 @@ public class SvcEncoder {
 					mAvcEncoders[i].queryInt(AvcEncoder.KEY_WIDTH, dst_width);
 					mAvcEncoders[i].queryInt(AvcEncoder.KEY_HEIGHT, dst_height);
 					
-					dst_yuv = YuvUtils.YuvDownsample(mPrimeColorFormat, src_yuv, src_width, src_height, dst_width[0], dst_height[0]);
+					dst_yuv = RawUtils.YuvDownsample(mPrimeColorFormat, src_yuv, src_width, src_height, dst_width[0], dst_height[0]);
 					if (dst_yuv != null)
 					{
-						int blen = (int) (YuvUtils.BytesPerPixel(mPrimeColorFormat) * dst_width[0] * dst_height[0]);
+						int blen = (int) (RawUtils.BytesPerPixel(mPrimeColorFormat) * dst_width[0] * dst_height[0]);
 						if (mRawDataQueue[i] != null)
 						{
 							//For pro

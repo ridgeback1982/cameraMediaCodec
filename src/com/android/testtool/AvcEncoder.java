@@ -26,6 +26,7 @@ public class AvcEncoder
 	public static final String KEY_COLORFORMAT = "key_colorformat";
 	public static final String KEY_WIDTH = "key_width";
 	public static final String KEY_HEIGHT = "key_height";
+	public static final String KEY_IDR_INTERVAL = "key-idrinterval";
 	
 	public static final int DEFAULT_AVC_BUF_SIZE = 1024*1024;	//1M bytes
 	
@@ -50,7 +51,7 @@ public class AvcEncoder
 	//device related:
 	//1. Galaxy S4, it is OK to set to -1, means no following IDR except the first one
 	//2. Nexus 5, if set to -1, every frame is IDR, no P frames!!!
-	private static final int IDR_INTERVEL_SECONDS = 60;		//60 seconds to generate an IDR
+	private int mIDRInterval = 60;		//60 seconds to generate an IDR
 	
 	public void Init(int colorformat, AvcEncoderSink sink/*null as default*/)
 	{
@@ -92,7 +93,7 @@ public class AvcEncoder
 		{
 			mMF.setInteger(MediaFormat.KEY_COLOR_FORMAT, mPrimeColorFormat);  
 		}
-		mMF.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, IDR_INTERVEL_SECONDS); //关键帧间隔时间 单位s
+		mMF.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, mIDRInterval); //关键帧间隔时间 单位s
 		mMF.setInteger("stride", width);
 		mMF.setInteger("slice-height", height);
 		mWidth = width;
@@ -132,6 +133,18 @@ public class AvcEncoder
 			return true;
 		}
 		
+		return false;
+	}
+	
+	public boolean setInt(String key, int value)
+	{
+		if (key.equals(KEY_IDR_INTERVAL))
+		{
+			if (mStatus != STATUS_LOADED)
+				return false;
+			mIDRInterval = value;
+			return true;
+		}
 		return false;
 	}
 	

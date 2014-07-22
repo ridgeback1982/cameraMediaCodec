@@ -10,7 +10,27 @@ import android.os.Environment;
 
 
 
-class YuvUtils {
+class RawUtils {
+	//Map to WseVieoType
+	public static final int CS_UNKNOWN = 0;
+	public static final int	CS_RGB24 = 1;
+	public static final int CS_I420 = 2;
+	public static final int CS_YUY2 = 3;
+	public static final int CS_BGR24 = 4;
+	public static final int CS_YV12 = 5;
+	public static final int CS_RGB24Flip = 6;
+	public static final int	CS_BGR24Flip = 7;
+	public static final int CS_RGBA32 = 8;
+	public static final int CS_BGRA32 = 9;
+	public static final int CS_ARGB32 = 10;
+	public static final int CS_ABGR32 = 11;
+	public static final int CS_RGBA32Flip = 12;
+	public static final int CS_RBGRA32Flip = 13;
+	public static final int CS_ARGB32Flip = 14;
+	public static final int CS_ABRG32Flip = 15;
+	public static final int CS_NV21 = 16;
+	public static final int CS_NV12 = 17;
+
 	
 	//debug only
 	private static FileOutputStream mFOS = null;
